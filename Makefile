@@ -1,4 +1,4 @@
 parser:
 	go run cmd/parser/main.go
-test_parser:
-	go test -v ./pkg/parser
+test_text:
+	go test -v ./pkg/text
