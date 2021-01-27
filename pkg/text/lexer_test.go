@@ -42,7 +42,7 @@ func TestTokenTypeString(t *testing.T) {
 		{Id, "Id"},
 		{Keyword, "Keyword"},
 		{BitwiseOperator, "BitwiseOperator"},
-		{Number, "Number"},
+		{IntegerLiteral, "IntegerLiteral"},
 	}
 
 	for _, d := range data {
@@ -57,10 +57,10 @@ func TestTokenString(t *testing.T) {
 		token    Token
 		expected string
 	}{
-		{Token{Position{1, 0}, "int", Keyword}, `<Keyword>[1:0] "int"`},
-		{Token{Position{3, 120}, "null", Null}, `<Null>[3:120] "null"`},
-		{Token{Position{1334, 133}, "variable", Id}, `<Id>[1334:133] "variable"`},
-		{Token{Position{1231, 3}, ">>", BitwiseOperator}, `<BitwiseOperator>[1231:3] ">>"`},
+		{newToken(1, 0, "int", Keyword), `<Keyword>[1:0] "int"`},
+		{newToken(3, 120, "null", NullLiteral), `<NullLiteral>[3:120] "null"`},
+		{newToken(1334, 133, "variable", Id), `<Id>[1334:133] "variable"`},
+		{newToken(1231, 3, ">>", BitwiseOperator), `<BitwiseOperator>[1231:3] ">>"`},
 	}
 
 	for _, d := range data {
@@ -160,7 +160,7 @@ func TestLexer_nextRune(t *testing.T) {
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
 			for lx.hasNextRune() {
-				lx.nextRune()
+				lx.nextChar()
 			}
 
 			if lx.pos != d.expected {
@@ -189,7 +189,7 @@ func TestLexer_lineTerminator(t *testing.T) {
 		// s := []rune(d.str)
 		withLexer(d.str, func(lx *Lexer) {
 			for i := 0; i < d.count; i++ {
-				r, _ := lx.nextRune()
+				r, _ := lx.nextChar()
 				lx.lineTerminator(r)
 			}
 			if lx.pos != d.expected {
@@ -214,7 +214,7 @@ hello`, 'h'},
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
 			lx.comment()
-			r, _ := lx.nextRune()
+			r, _ := lx.nextChar()
 			if r != d.expected {
 				t.Errorf("traditionalComment should end at backslash, expected %#v instead of %#v.",
 					string(r),
@@ -254,7 +254,7 @@ func TestLexer_traditionalComment(t *testing.T) {
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
 			lx.traditionalComment()
-			r, _ := lx.nextRune()
+			r, _ := lx.nextChar()
 			if r != d.expected {
 				t.Errorf("traditionalComment should end at backslash, expected %#v instead of %#v.",
 					string(r),
@@ -284,7 +284,7 @@ func TestLexer_commentTailStar(t *testing.T) {
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
 			lx.commentTailStar()
-			r, _ := lx.nextRune()
+			r, _ := lx.nextChar()
 			if r != d.expected {
 				t.Errorf("commentTailStar should end at backslash, expected %#v instead of %#v.",
 					string(r),
@@ -312,10 +312,10 @@ newline`, '\n'}, //only one LF is consumed
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
 			//throw out the double slash first
-			lx.nextRune()
-			lx.nextRune()
+			lx.nextChar()
+			lx.nextChar()
 			lx.endOfLineComment()
-			r, _ := lx.nextRune()
+			r, _ := lx.nextChar()
 			if r != d.expected {
 				t.Errorf("Inline comment should end at newline. But got %#v instead", string(r))
 			}
@@ -338,7 +338,7 @@ func TestLexer_lineTerminator_panic(t *testing.T) {
 		withLexer(d.str, func(lx *Lexer) {
 			defer assertPanic(t, "Should panic if CR not followed by LF.")
 			for i := 0; i < d.count; i++ {
-				r, _ := lx.nextRune()
+				r, _ := lx.nextChar()
 				lx.lineTerminator(r)
 			}
 		})
@@ -357,25 +357,25 @@ func TestLexer_identifier(t *testing.T) {
 		{"internal", "internal", Id},    // started with int
 		{"bool", "bool", Id},            // not a keyword
 		{"boolean", "boolean", Keyword}, //actual keyword
-		{"true", "true", Boolean},
-		{"null", "null", Null},
+		{"true", "true", BooleanLiteral},
+		{"null", "null", NullLiteral},
 	}
 
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
-			r, _ := lx.nextRune()
+			r, _ := lx.nextChar()
 			tok := lx.identifier(r)
 
-			if d.value != tok.Value {
+			if d.value != tok.Value() {
 				t.Errorf("Token value does not match, expecting %#v instead of %#v.",
 					d.value,
-					tok.Value,
+					tok.Value(),
 				)
 			}
 
 			if d.ttype != tok.Type {
 				t.Errorf("Token type of %s expected to be %#v instead of %#v.",
-					tok.Value,
+					tok.Value(),
 					d.ttype.String(),
 					tok.Type.String(),
 				)
@@ -384,6 +384,118 @@ func TestLexer_identifier(t *testing.T) {
 		})
 	}
 
+}
+
+func TestLexer_numeralLiteral(t *testing.T) {
+	data := []struct {
+		str   string
+		ttype TokenType
+	}{
+		// decimal integers
+		{"0", IntegerLiteral},
+		{"123", IntegerLiteral},
+		// long suffix
+		{"123l", IntegerLiteral},
+		{"123L", IntegerLiteral},
+		//underscores is accepted
+		{"123_456", IntegerLiteral},
+		{"123___456", IntegerLiteral},
+		{"123_456_789", IntegerLiteral},
+		//HEX int
+		{"0x0", IntegerLiteral},
+		{"0x123", IntegerLiteral},
+		{"0x123FF", IntegerLiteral},
+		{"0x123FFl", IntegerLiteral},
+		{"0x123FFL", IntegerLiteral},
+		{"0xAFFF", IntegerLiteral},
+		{"0xffff", IntegerLiteral},
+		{"0x00_ff", IntegerLiteral},
+		{"0x00_ff_aa_11", IntegerLiteral},
+		{"0x00_ff_aa__11", IntegerLiteral},
+		//OCTAL int
+		{"00", IntegerLiteral},
+		{"0123", IntegerLiteral},
+		{"0123l", IntegerLiteral},
+		{"0123L", IntegerLiteral},
+		{"0123_456l", IntegerLiteral},
+		{"0123_456_7l", IntegerLiteral},
+		{"0123_456_7l", IntegerLiteral},
+		{"0123_456__7l", IntegerLiteral},
+		//BINARY int
+		{"0b0", IntegerLiteral},
+		{"0b101", IntegerLiteral},
+		{"0b1001", IntegerLiteral},
+		{"0b1001l", IntegerLiteral},
+		{"0b1001L", IntegerLiteral},
+		{"0b111_0000_1111", IntegerLiteral},
+		{"0b111__0000__1111", IntegerLiteral},
+		{"0b111__0000__1111l", IntegerLiteral},
+
+		//FLOATS
+		// floating point literals
+		{"0f", FloatingPointLiteral},
+		{"3f", FloatingPointLiteral},
+		{"3F", FloatingPointLiteral},
+		{"0.2f", FloatingPointLiteral},
+		{".2f", FloatingPointLiteral},
+		{".2f", FloatingPointLiteral},
+		// exponents
+		{"3e3f", FloatingPointLiteral},
+		{"3E3f", FloatingPointLiteral},
+		{"3E-3f", FloatingPointLiteral}, //  signed exponent
+		{"3e+3f", FloatingPointLiteral},
+		{"3e+3", FloatingPointLiteral},
+		{"3.32e+3", FloatingPointLiteral},
+		{"0.123456e7", FloatingPointLiteral},
+		{"0.123456e7f", FloatingPointLiteral},
+		{".23e4", FloatingPointLiteral},
+		//underscored
+		{"12_34.56_7e4", FloatingPointLiteral},
+		{"12__34.56__8_7e4f", FloatingPointLiteral},
+		{"0.5_6e7_8f", FloatingPointLiteral},
+		// double suffix
+		{"0d", FloatingPointLiteral},
+		{"3d", FloatingPointLiteral},
+		{".3d", FloatingPointLiteral},
+		{"3.3d", FloatingPointLiteral},
+		{"1.23e-2d", FloatingPointLiteral},
+		{"1.23e+4d", FloatingPointLiteral},
+		{"1.23e+4d", FloatingPointLiteral},
+		{"1.23e+4d", FloatingPointLiteral},
+		{"1.23e-4d", FloatingPointLiteral},
+		{"1.23_456e+4d", FloatingPointLiteral},
+		{".123_4e5_6d", FloatingPointLiteral},
+		{"9.123_4e-5_6d", FloatingPointLiteral},
+		//HEX Float
+		{"0x12p34", FloatingPointLiteral},
+		{"0X12p34", FloatingPointLiteral}, // uppercase X
+		{"0x12p34f", FloatingPointLiteral},
+		{"0x.12p34f", FloatingPointLiteral},
+		{"0x.ABp34f", FloatingPointLiteral},
+		{"0xABP34F", FloatingPointLiteral},
+		{"0xABP+34F", FloatingPointLiteral},
+		{"0xABP-34F", FloatingPointLiteral},
+		{"0xAB.Cp34F", FloatingPointLiteral},
+		{"0xAB.Cp34F", FloatingPointLiteral},
+		{"0xab.12p34F", FloatingPointLiteral},
+		{"0xF00D.ABp34F", FloatingPointLiteral},
+		{"0xF0_0D.12_ABp-34F", FloatingPointLiteral},
+		{"0xF0_0D.12_ABp+34F", FloatingPointLiteral},
+		{"0XF0_0D.12_ABp+34F", FloatingPointLiteral}, // uppercase X
+	}
+	for _, d := range data {
+		withLexer(d.str, func(lx *Lexer) {
+			r, _ := lx.nextChar()
+			tok := lx.numeralLiteral(r)
+			if tok.Type != d.ttype {
+				t.Errorf("numeralLiteral should return %s on %s.", d.ttype, d.str)
+			}
+
+			if tok.Value() != d.str {
+				t.Errorf("numeralLiteral not consuming all the character on %#v, instead returning %#v", d.str, tok.Value())
+			}
+		})
+	}
 }
 
 func TestLexer_whitespace(t *testing.T) {
@@ -405,7 +517,7 @@ func TestLexer_whitespace(t *testing.T) {
 		withLexer(d.str, func(lx *Lexer) {
 			var r rune
 			for i := 0; i < d.count; i++ {
-				r, _ = lx.nextRune()
+				r, _ = lx.nextChar()
 				lx.whitespace(r)
 			}
 
@@ -427,7 +539,7 @@ func TestLexer_escapeUnicode_panic(t *testing.T) {
 	for _, str := range data {
 		withLexer(str, func(lx *Lexer) {
 			defer assertPanic(t, "Should panic when invalid unicode escape is present.")
-			lx.nextRune()
+			lx.nextChar()
 		})
 
 	}
@@ -455,7 +567,7 @@ World`, 12, "Hello\nWorld"},
 		withLexer(d.str, func(lx *Lexer) {
 			var text strings.Builder
 			for i := 0; i < d.count; i++ {
-				r, e := lx.nextRune()
+				r, e := lx.nextChar()
 				if e == nil {
 					text.WriteRune(r)
 				}
@@ -479,16 +591,16 @@ func TestLexer_matchExact(t *testing.T) {
 		count    int
 		expected bool
 	}{
-		{"ABCD", isHexDigit, 4, true},
-		{"0123", isHexDigit, 3, true},
-		{"0x123", isHexDigit, 3, false},
-		{"0123XX", isHexDigit, 6, false},
-		{" hi", isWhiteSpace, 2, false},
+		{"ABCD", IsHexDigit, 4, true},
+		{"0123", IsHexDigit, 3, true},
+		{"0x123", IsHexDigit, 3, false},
+		{"0123XX", IsHexDigit, 6, false},
+		{" hi", IsWhitespace, 2, false},
 	}
 
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
-			if lx.matchExact(d.f, d.count) != d.expected {
+			if lx.matchExact(d.f, d.count, true) != d.expected {
 				t.Errorf("lx.MatchExact should return %#v", d.expected)
 			}
 		})
@@ -502,16 +614,16 @@ func TestLexer_matchZeroOrMore(t *testing.T) {
 		f        Matcher
 		expected rune
 	}{
-		{"1234", isDigit, 0},
-		{"", isDigit, 0},
-		{"0x123", isDigit, 'x'},
-		{"123456712312381238w11", isDigit, 'w'},
+		{"1234", IsDigit, 0},
+		{"", IsDigit, 0},
+		{"0x123", IsDigit, 'x'},
+		{"123456712312381238w11", IsDigit, 'w'},
 	}
 
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
-			lx.matchZeroOrMore(d.f)
-			r, _ := lx.nextRune()
+			lx.matchZeroOrMore(d.f, true)
+			r, _ := lx.nextChar()
 			if r != d.expected {
 				t.Errorf("lx.MatchZeroOrMore should stop at %#v instead of %#v", string(d.expected), string(r))
 			}
@@ -526,16 +638,16 @@ func TestLexer_matchOneOrMore(t *testing.T) {
 		f        Matcher
 		expected bool
 	}{
-		{"1234", isDigit, true},
-		{"", isDigit, false},
-		{"a123", isDigit, false},
-		{"0x123", isDigit, true},
-		{"123456712312381238w11", isDigit, true},
+		{"1234", IsDigit, true},
+		{"", IsDigit, false},
+		{"a123", IsDigit, false},
+		{"0x123", IsDigit, true},
+		{"123456712312381238w11", IsDigit, true},
 	}
 
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
-			if lx.matchOneOrMore(d.f) != d.expected {
+			if lx.matchOneOrMore(d.f, true) != d.expected {
 				t.Errorf("lx.MatchOneOrMore should return %#v", d.expected)
 			}
 		})
@@ -567,7 +679,7 @@ func TestIsJavaKeywords(t *testing.T) {
 	}
 
 	for _, d := range data {
-		if isJavaKeyword(d.str) != d.expected {
+		if IsJavaKeyword(d.str) != d.expected {
 			t.Errorf("%v should return %#v", d.str, d.expected)
 		}
 	}

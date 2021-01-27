@@ -36,7 +36,7 @@ func TestIsJavaLetter(t *testing.T) {
 		{'#', false},
 		{'`', false},
 	}
-	testMatcher(t, isJavaLetter, data)
+	testMatcher(t, IsJavaLetter, data)
 
 }
 
@@ -53,7 +53,7 @@ func TestIsJavaLetterDigit(t *testing.T) {
 		{'#', false},
 		{'`', false},
 	}
-	testMatcher(t, isJavaLetterOrDigit, data)
+	testMatcher(t, IsJavaLetterOrDigit, data)
 }
 
 func TestIsDigit(t *testing.T) {
@@ -72,7 +72,7 @@ func TestIsDigit(t *testing.T) {
 		{'`', false},
 	}
 
-	testMatcher(t, isDigit, data)
+	testMatcher(t, IsDigit, data)
 }
 
 func TestIsSeparatorStart(t *testing.T) {
@@ -84,7 +84,7 @@ func TestIsSeparatorStart(t *testing.T) {
 		{'+', false},
 		{'\u003b', true}, //semicolon
 	}
-	testMatcher(t, isSeparatorStart, data)
+	testMatcher(t, IsSeparator, data)
 
 }
 
@@ -100,7 +100,7 @@ func TestIsInputCharacter(t *testing.T) {
 		{'\n', false},
 		{'\r', false},
 	}
-	testMatcher(t, isInputCharacter, data)
+	testMatcher(t, IsInputCharacter, data)
 
 }
 
@@ -113,7 +113,7 @@ func TestIsWhitespace(t *testing.T) {
 		{' ', true},
 		{'0', false},
 	}
-	testMatcher(t, isWhiteSpace, data)
+	testMatcher(t, IsWhitespace, data)
 }
 
 func TestIsEscapeSequence(t *testing.T) {
@@ -130,7 +130,7 @@ func TestIsEscapeSequence(t *testing.T) {
 		{'u', false},
 		{'0', false},
 	}
-	testMatcher(t, isEscapeSequence, data)
+	testMatcher(t, IsEscapeSequence, data)
 }
 
 func TestIsHexDigit(t *testing.T) {
@@ -147,7 +147,7 @@ func TestIsHexDigit(t *testing.T) {
 		{'\u0000', false}, // null
 		{'\u0030', true},  //literal zero
 	}
-	testMatcher(t, isHexDigit, data)
+	testMatcher(t, IsHexDigit, data)
 }
 
 func TestRuneIsOneOf(t *testing.T) {
@@ -165,7 +165,7 @@ func TestRuneIsOneOf(t *testing.T) {
 	}
 
 	for _, d := range data {
-		if d.expected != runeIsOneOf(d.r, d.str) {
+		if d.expected != IsRuneIn(d.r, d.str) {
 			t.Errorf("runeIsOneOf should return %v on (%#v, %s)", d.expected, string(d.r), d.str)
 		}
 	}

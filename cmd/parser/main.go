@@ -2,15 +2,22 @@ package main
 
 import (
 	"fmt"
-
-	"github.com/gumelarme/yava/pkg/text"
+	"strconv"
+	"strings"
 )
 
 func main() {
-	scanner := text.NewFileScanner("./cmd/parser/testdata/Hello.java")
-	fmt.Println(scanner.HasNext())
-	for scanner.HasNext() {
-		t := scanner.Next()
-		fmt.Println(t)
-	}
+	var s strings.Builder
+	s.WriteRune('\\')
+	s.WriteRune('u')
+	s.WriteRune('0')
+	s.WriteRune('0')
+	s.WriteRune('7')
+	s.WriteRune('5')
+
+	str := s.String()
+
+	fmt.Println(str)
+	v, _, _, _ := strconv.UnquoteChar(str, 0)
+	fmt.Println(string(v))
 }
