@@ -34,6 +34,7 @@ func TestPositionString(t *testing.T) {
 		}
 	}
 }
+
 func TestTokenTypeString(t *testing.T) {
 	data := []struct {
 		tt       TokenType
@@ -493,6 +494,107 @@ func TestLexer_numeralLiteral(t *testing.T) {
 
 			if tok.Value() != d.str {
 				t.Errorf("numeralLiteral not consuming all the character on %#v, instead returning %#v", d.str, tok.Value())
+			}
+		})
+	}
+}
+
+func TestLexer_stringLiteral(t *testing.T) {
+	data := []struct {
+		str    string
+		expect string
+	}{
+		{`""`, ""},
+		{`"Nice"`, "Nice"},
+		{`"\""`, "\""},
+		{`"\n"`, "\n"},
+		{`"Hi\nBro"`, "Hi\nBro"},
+		{`"\n\n\n"`, "\n\n\n"},
+		{`"\r\n"`, "\r\n"},
+		{`"Hello\r\n"`, "Hello\r\n"},
+		{`"Hello\b"`, "Hello\b"},
+		{`"Hello\tHi"`, "Hello\tHi"},
+		{`"Hello\fHi"`, "Hello\fHi"},
+		// should only accept the string, and ignore what comes after it
+		{`"Hello"Nice`, "Hello"},
+
+		// unicode
+		{`"\\u006E"`, "\n"},
+		{`\u0022nice\u0022`, "nice"},
+		{`"N\u005C\u006Eice"`, "N\nice"},
+		{`\u0022\u006E\u0069\u0063\u0065\u0022`, "nice"},
+		{`\u0022\u006E\u0069\u0063\u0065\u0022`, "nice"},
+
+		// the raw input \u005cu005a results in the six characters \ u 0 0 5 a,
+		// because 005c is the Unicode value for \. It does not result in the character Z,
+		// which is Unicode character 005a, because the \ that resulted
+		// from the \u005c is not interpreted as the start of a further Unicode escape.
+		{`"\u005Cu005A"`, "\\u005A"},
+		{`"™"`, "\u2122"}, // trademark symbol
+		{`"你"`, "你"},      // chinese character
+
+		//octal
+		{`"\116\151"`, "Ni"},
+		{`"\116\134\156"`, "N\n"},
+		{`"\116\134156"`, "N\\156"},
+	}
+
+	for _, d := range data {
+		withLexer(d.str, func(lx *Lexer) {
+			token := lx.stringLiteral()
+
+			if token.Type != StringLiteral {
+				t.Errorf("Should return StringLiteral instead of %s.", token.Type)
+			}
+
+			if token.Value() != d.expect {
+				t.Errorf("Should return %#v instead of %#v.", d.expect, token.Value())
+			}
+
+			if l := len(token.Value()); l != len(d.expect) {
+				t.Errorf("Length of string doesnt match, expected %d instead of %d.", len(d.expect), l)
+			}
+		})
+	}
+}
+
+func TestLexer_charLiteral(t *testing.T) {
+	data := []struct {
+		str    string
+		expect string
+	}{
+		{`'x'`, "x"},
+		{`'1'`, "1"},
+		{`'\''`, `'`}, // escaped single quote
+		{`'\\'`, `\`}, // escaped backslash
+		{`'\n'`, "\n"},
+
+		// unicode testing
+		//mixed unicode and literal values
+		// \u0027 is a unicode for single quote
+		{`'\u0041\u0027`, "A"},
+		{`\u0027\u0041'`, "A"},
+		{`\u0027A'`, "A"},
+		{`'\u0000'`, "\u0000"},
+		{`'\uFFFF'`, "\uFFFF"},
+		{`'\u0041'`, "A"},
+		{`'™'`, "\u2122"}, // trademark symbol
+		{`'你'`, "你"},      // chinese character
+		// all unicode
+		{`\u0027A\u0027`, "A"},
+		{`\u0027\u0041\u0027`, "A"},
+		{`\u0027\u005C\u006E\u0027`, "\n"}, // \u005C\u006E = \n
+		{`\u0027\u005C\u005C\u0027`, `\`},  // \u005C\u006E = \\
+	}
+
+	for _, d := range data {
+		withLexer(d.str, func(lx *Lexer) {
+			token := lx.charLiteral()
+			if token.Type != CharLiteral {
+				t.Errorf("Should return CharLiteral instead of %s", token.Type)
+			}
+			if token.Value() != d.expect {
+				t.Errorf("Should return %#v instead of %#v", d.expect, token.Value())
 			}
 		})
 	}

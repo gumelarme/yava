@@ -1,3 +1,6 @@
 debug.test
 changes.org
+*.out
+*.html
+test/*
 TAGS

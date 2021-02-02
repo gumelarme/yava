@@ -238,7 +238,10 @@ func (lx *Lexer) runeGetter() (r rune, err error) {
 
 	r, err = f()
 	if r == '\\' && !escaped {
-		r = lx.escapeUnicode()
+		p, _ := lx.Scanner.Peek()
+		if p == 'u' {
+			r = lx.escapeUnicode()
+		}
 	}
 	return
 }
@@ -274,6 +277,12 @@ func (lx *Lexer) errf(str string) string {
 
 // escapeUnicode match the unicode escape sequence then put it in the unicodeQueue
 func (lx *Lexer) escapeUnicode() rune {
+	// temporarly save current Token, and reassign it at the end
+	curToken := lx.token
+	defer func() {
+		lx.token = curToken
+	}()
+
 	lx.token.writeRune('\\')
 	// one or more u after backslash is accepted
 	lx.matchOneOrMore(func(r rune) bool {
@@ -298,7 +307,6 @@ func (lx *Lexer) escapeUnicode() rune {
 		panic(lx.errf("Error while reading isEscaped unicode."))
 	}
 
-	lx.token.clear()
 	return v
 }
 
@@ -638,12 +646,138 @@ func (lx *Lexer) separatedByUnderscore(matcher Matcher) {
 	}
 }
 
+// stringLiteral recognize double quoted literal string value
 func (lx *Lexer) stringLiteral() (t Token) {
-	return
+	lx.nextChar() // throw out the opening double quote
+
+	// Because Java allowed both Unicode and Octal escape
+	// inside a string, either of those escape that evaluate
+	// to a backslash need to be processed further. But Unicode
+	// is evaluated early in the process using peekChar & nextChar,
+	// while Octal does not. So it need two step to correctly
+	// evaluate an Octal escape.
+
+	// the first step is to catch everything inside
+	// double quotes. A double quotes escape sequence \"
+	// and octal escape will be processed here, but
+	// any other escape sequence such as:  \n \r etc. will not.
+	for lx.hasNextRune() {
+		//match anything and stop at " and \
+		lx.matchZeroOrMore(func(r rune) bool {
+			return IsInputCharacter(r) &&
+				r != '"' &&
+				r != '\\'
+		}, true)
+
+		p, _ := lx.peekChar()
+		if p == '\\' {
+			backslash, _ := lx.nextChar()
+			p, _ = lx.peekChar()
+
+			if IsOctalDigit(p) {
+				// match octal escape sequence
+				r := lx.octalEscape()
+				lx.token.writeRune(r)
+			} else if p == '"' {
+				// match a double quote
+				lx.token.writeRune('"')
+			} else {
+				// other things are ignored
+				// and consumed as it is
+				lx.token.writeRune(backslash)
+			}
+
+		} else if p == '"' {
+			break
+		}
+	}
+
+	// match the closing of the string
+	r, e := lx.nextChar()
+	if e != nil || r != '"' {
+		msg := lx.errf("Malformed string literal, should close expresion with double quote (\").")
+		panic(msg)
+	}
+
+	// the result here is a raw input with octal escape evaluated
+	curString := []rune(lx.token.Value())
+	lx.token.clear() // clear the token for the actual evaluation
+
+	// next is to process other escape sequence
+	for i := 0; i < len(curString); i++ {
+		char := curString[i]
+		if curString[i] == '\\' {
+			if IsEscapeSequence(curString[i+1]) {
+				i++
+				char = escapeSequenceCharacter[curString[i]]
+			}
+		}
+		lx.token.writeRune(char)
+	}
+
+	lx.token.Type = StringLiteral
+	return lx.returnAndReset()
 }
 
-func (lx *Lexer) charLiteral() (t Token) {
-	return
+// charLiteral recognize literal char value
+// TODO: should escaped sequence return the real values
+// or keep the literal and process it in the parser
+func (lx *Lexer) charLiteral() Token {
+	lx.nextChar() // throw out the opening quote
+
+	r, _ := lx.nextChar()
+	if r == '\\' {
+		c := lx.escapeSequence()
+		lx.token.writeRune(c)
+	} else if IsInputCharacter(r) {
+		lx.token.writeRune(r)
+	}
+
+	q, e := lx.nextChar() // throw out the closing quote
+	if q != '\'' || e != nil {
+		msg := lx.errf("Malformed char literal, should close expresion with single quote (').")
+		panic(msg)
+	}
+	lx.token.Type = CharLiteral
+	return lx.returnAndReset()
+}
+
+func (lx *Lexer) escapeSequence() rune {
+	p, _ := lx.peekChar()
+
+	if IsEscapeSequence(p) {
+		lx.nextChar()
+		return escapeSequenceCharacter[p]
+	}
+
+	return 0
+}
+
+func (lx *Lexer) octalEscape() rune {
+	max_digit := 2
+	p, _ := lx.peekChar()
+	if IsZeroToThree(p) {
+		max_digit = 3
+	}
+
+	octals := []rune{}
+	for i := 0; i < max_digit; i++ {
+		p, _ := lx.peekChar()
+		if IsOctalDigit(p) {
+			r, _ := lx.nextChar()
+			octals = append(octals, r)
+		} else {
+			break
+		}
+	}
+
+	decimal, err := strconv.ParseInt(string(octals), 8, 32)
+	if err != nil {
+		panic(lx.errf("Error while processing octal escape sequence."))
+	}
+
+	rn := rune(decimal)
+	return rn
 }
 
 // whitespace match the any whitespace

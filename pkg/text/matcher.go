@@ -41,7 +41,7 @@ func IsNonZeroDigit(r rune) bool {
 
 // IsDigit check if rune is a valid decimal digits
 func IsDigit(r rune) bool {
-	return (r >= '0' && r <= '9')
+	return r >= '0' && r <= '9'
 }
 
 // IsSeparator check if rune is a Java separator
@@ -76,9 +76,13 @@ func IsHexDigit(r rune) bool {
 	return IsRuneIn(r, "0123456789abcdefABCDEF")
 }
 
+func IsZeroToThree(r rune) bool {
+	return r >= '0' && r <= '3'
+}
+
 // IsOctalDigit check if rune is valid octal digit
 func IsOctalDigit(r rune) bool {
-	return (r >= '0' && r <= '7')
+	return r >= '0' && r <= '7'
 }
 
 // IsBinaryDigit check if rune is valid binary digit
