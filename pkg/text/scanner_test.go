@@ -10,9 +10,9 @@ import (
 	"testing"
 )
 
-func assertPanic(t *testing.T, str string) {
+func assertPanic(t *testing.T, msg string) {
 	if r := recover(); r == nil {
-		t.Error(str)
+		t.Error(msg)
 	}
 }
 

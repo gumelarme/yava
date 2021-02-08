@@ -670,6 +670,7 @@ func (lx *Lexer) stringLiteral() (t Token) {
 		}, true)
 
 		p, _ := lx.peekChar()
+
 		if p == '\\' {
 			backslash, _ := lx.nextChar()
 			p, _ = lx.peekChar()
@@ -678,16 +679,29 @@ func (lx *Lexer) stringLiteral() (t Token) {
 				// match octal escape sequence
 				r := lx.octalEscape()
 				lx.token.writeRune(r)
+
+				// this is done to prevent \13456 (134 is a backslash)
+				// to be treated as \56 and then yield illegal escape sequence.
+				// The java standard treat the excess number as literal number,
+				// not reevaluate them with the backslash
+				if r == '\\' {
+					p, _ = lx.peekChar()
+					if IsDigit(p) {
+						lx.token.writeRune('\\')
+					}
+				}
+
 			} else if p == '"' {
 				// match a double quote
+				lx.nextChar()
 				lx.token.writeRune('"')
 			} else {
 				// other things are ignored
 				// and consumed as it is
 				lx.token.writeRune(backslash)
 			}
-
-		} else if p == '"' {
+		} else {
+			// get hit on double quote, CR or LF
 			break
 		}
 	}
@@ -710,6 +724,9 @@ func (lx *Lexer) stringLiteral() (t Token) {
 			if IsEscapeSequence(curString[i+1]) {
 				i++
 				char = escapeSequenceCharacter[curString[i]]
+			} else {
+				msg := lx.errf("Invalid escape sequence.")
+				panic(msg)
 			}
 		}
 		lx.token.writeRune(char)
@@ -727,14 +744,27 @@ func (lx *Lexer) charLiteral() Token {
 
 	r, _ := lx.nextChar()
 	if r == '\\' {
-		c := lx.escapeSequence()
+		var c rune
+
+		p, _ := lx.peekChar()
+		if IsOctalDigit(p) {
+			c = lx.octalEscape()
+		} else {
+			c = lx.escapeSequence()
+		}
+
 		lx.token.writeRune(c)
 	} else if IsInputCharacter(r) {
 		lx.token.writeRune(r)
+	} else {
+		// hit on CR and LF
+		// fmt.Println("Panicking: ", r)
+		panic("Illegal char, instead use \r and \n for CR and LF respectively.")
 	}
 
 	q, e := lx.nextChar() // throw out the closing quote
-	if q != '\'' || e != nil {
+	isInvalid := q != '\''
+	if isInvalid || e != nil {
 		msg := lx.errf("Malformed char literal, should close expresion with single quote (').")
 		panic(msg)
 	}
@@ -742,18 +772,29 @@ func (lx *Lexer) charLiteral() Token {
 	return lx.returnAndReset()
 }
 
+// escapeSequence match a string a escape sequence
+// and return the real character
 func (lx *Lexer) escapeSequence() rune {
 	p, _ := lx.peekChar()
 
 	if IsEscapeSequence(p) {
 		lx.nextChar()
 		return escapeSequenceCharacter[p]
+	} else {
+		msg := "Illegal escape sequence."
+		panic(lx.errf(msg))
 	}
-
-	return 0
 }
 
+// octalEscape match an octal escape sequence
+// and return the real character
 func (lx *Lexer) octalEscape() rune {
+
+	// if first digit is 0-3 then it will
+	// match up to 3 digit, otherwise (4-7)
+	// only 2 digit are allowed, and match the
+	// next character as literal string
+	// https://docs.oracle.com/javase/specs/jls/se8/html/jls-3.html#jls-OctalEscape
 	max_digit := 2
 	p, _ := lx.peekChar()
 	if IsZeroToThree(p) {

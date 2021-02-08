@@ -1,6 +1,7 @@
 package text
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -519,28 +520,47 @@ func TestLexer_stringLiteral(t *testing.T) {
 		{`"Hello"Nice`, "Hello"},
 
 		// unicode
+		// \u0022 is a unicode for double quote
 		{`"\\u006E"`, "\n"},
 		{`\u0022nice\u0022`, "nice"},
 		{`"N\u005C\u006Eice"`, "N\nice"},
 		{`\u0022\u006E\u0069\u0063\u0065\u0022`, "nice"},
 		{`\u0022\u006E\u0069\u0063\u0065\u0022`, "nice"},
 
-		// the raw input \u005cu005a results in the six characters \ u 0 0 5 a,
-		// because 005c is the Unicode value for \. It does not result in the character Z,
-		// which is Unicode character 005a, because the \ that resulted
-		// from the \u005c is not interpreted as the start of a further Unicode escape.
-		{`"\u005Cu005A"`, "\\u005A"},
 		{`"™"`, "\u2122"}, // trademark symbol
 		{`"你"`, "你"},      // chinese character
 
 		//octal
-		{`"\116\151"`, "Ni"},
+		{`"\7"`, "\u0007"},         // 1 digit
+		{`"\7\6"`, "\u0007\u0006"}, // 2 x 1 digit
+		{`"\7Hi"`, "\u0007Hi"},     // 1 digit with normal text
+		{`"\61"`, "1"},             // 2 digits
+		{`"\61\62"`, "12"},         // 2 x 2 digits
+		{`"\61Hi"`, "1Hi"},         // 2 digits with normal text
+		{`"\116"`, "N"},            // 3 digits
+		{`"\116\111"`, "NI"},       // 3 digits
+		{`"\116\151Nice"`, "NiNice"},
 		{`"\116\134\156"`, "N\n"},
 		{`"\116\134156"`, "N\\156"},
+
+		// an octal digit with n >= 3
+		// it only read up to 2 digit
+		{`"\772"`, "?2"},
+		{`"\505"`, "(5"},
+		// an octal for CR and LF is valid
+		{`"Nice\12Thing"`, "Nice\nThing"},
+		{`"Nice\15Thing"`, "Nice\rThing"},
+		{`"Nice\15\12Thing"`, "Nice\r\nThing"},
 	}
 
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
+			defer func() {
+				msg := recover()
+				if msg != nil {
+					t.Errorf("Panicked on %s, %s", d.str, msg)
+				}
+			}()
 			token := lx.stringLiteral()
 
 			if token.Type != StringLiteral {
@@ -557,6 +577,39 @@ func TestLexer_stringLiteral(t *testing.T) {
 		})
 	}
 }
+func TestLexer_stringLiteral_panic(t *testing.T) {
+	data := []string{
+		// unclosed string
+		`"`,
+		`"Nice`,
+		`"\"`,
+		`"\\\"`,
+		// illegal escape character
+		`"\A"`,
+		`"\&"`,
+		`"\*"`,
+		// invalid octal
+		`"\9"`,
+		`"\8"`,
+		`"\u000a"`, // LF is invalid, use \n instead
+		`"\u000d"`, // CR is invalid, use \r instead
+
+		// the raw input \u005cu005a results in the six characters \ u 0 0 5 a,
+		// because 005c is the Unicode value for \. It does not result in the character Z,
+		// which is Unicode character 005a, because the \ that resulted
+		// from the \u005c is not interpreted as the start of a further Unicode escape.
+		`"\u005Cu005A"`,
+	}
+
+	for _, d := range data {
+		withLexer(d, func(lx *Lexer) {
+			msg := fmt.Sprintf("Should panic on %v", d)
+			defer assertPanic(t, msg)
+
+			lx.stringLiteral()
+		})
+	}
+}
 
 func TestLexer_charLiteral(t *testing.T) {
 	data := []struct {
@@ -568,6 +621,10 @@ func TestLexer_charLiteral(t *testing.T) {
 		{`'\''`, `'`}, // escaped single quote
 		{`'\\'`, `\`}, // escaped backslash
 		{`'\n'`, "\n"},
+		{`'\r'`, "\r"},
+		{`'\12'`, "\n"},
+		{`'\15'`, "\r"},
+		{`'\134'`, "\\"}, // an octal representation of backslash
 
 		// unicode testing
 		//mixed unicode and literal values
@@ -589,6 +646,13 @@ func TestLexer_charLiteral(t *testing.T) {
 
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
+			defer func() {
+				if s := recover(); s != nil {
+					msg := fmt.Sprintf("Panicked on %v, %v", d.str, s)
+					t.Fatal(msg)
+				}
+			}()
+
 			token := lx.charLiteral()
 			if token.Type != CharLiteral {
 				t.Errorf("Should return CharLiteral instead of %s", token.Type)
@@ -598,6 +662,92 @@ func TestLexer_charLiteral(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLexer_charLiteral_panic(t *testing.T) {
+	data := []string{
+		// unclosed quote
+		`'`,
+		`\u0027'`,
+		//empty character
+		`''`,
+		// too much character
+		`'AB'`,
+		`'12'`,
+		// LF and CR are invalid
+		`'\u000A'`,
+		`'\u000D'`,
+	}
+
+	for _, str := range data {
+		withLexer(str, func(lx *Lexer) {
+			msg := fmt.Sprintf("Should panic on %v", str)
+			defer assertPanic(t, msg)
+
+			lx.charLiteral()
+		})
+	}
+}
+
+func TestLexer_octalEscape(t *testing.T) {
+	data := []struct {
+		str    string
+		expect rune
+	}{
+		{"7", '\u0007'},
+		{"60", '0'},
+		{"101", 'A'},
+		{"172", 'z'},
+		{"377", '\u00FF'}, // maximum octal value
+
+		// allowed up to 3 digit
+		{"1", '\u0001'},
+		{"12", '\u000A'},
+		{"123", '\u0053'},
+
+		// should only read the first 2 digits
+		{"400", '\u0020'},
+		{"641", '4'},
+		{"777", '\u003F'},
+		{"7012", '8'},
+		// stop reading if non octal is found
+		{"19", '\u0001'},
+		{"1-", '\u0001'},
+		{"789", '\u0007'},
+	}
+
+	for _, d := range data {
+		withLexer(d.str, func(lx *Lexer) {
+			r := lx.octalEscape()
+			if r != d.expect {
+				t.Errorf("Should return %#v instead of %#v.",
+					d.expect,
+					string(r),
+				)
+			}
+		})
+	}
+}
+
+func TestLexer_octalEscape_panic(t *testing.T) {
+	data := []string{
+		"8",
+		"9",
+		"A",
+		"-",
+		"\\",
+		"889",
+		"889",
+	}
+
+	for _, d := range data {
+		withLexer(d, func(lx *Lexer) {
+			msg := fmt.Sprintf("Should panic on %v ", d)
+			defer assertPanic(t, msg)
+			lx.octalEscape()
+		})
+	}
+
 }
 
 func TestLexer_whitespace(t *testing.T) {
