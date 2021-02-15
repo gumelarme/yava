@@ -43,7 +43,7 @@ func TestTokenTypeString(t *testing.T) {
 	}{
 		{Id, "Id"},
 		{Keyword, "Keyword"},
-		{BitwiseOperator, "BitwiseOperator"},
+		{Operator, "Operator"},
 		{IntegerLiteral, "IntegerLiteral"},
 	}
 
@@ -62,7 +62,7 @@ func TestTokenString(t *testing.T) {
 		{newToken(1, 0, "int", Keyword), `<Keyword>[1:0] "int"`},
 		{newToken(3, 120, "null", NullLiteral), `<NullLiteral>[3:120] "null"`},
 		{newToken(1334, 133, "variable", Id), `<Id>[1334:133] "variable"`},
-		{newToken(1231, 3, ">>", BitwiseOperator), `<BitwiseOperator>[1231:3] ">>"`},
+		{newToken(1231, 3, ">>", Operator), `<Operator>[1231:3] ">>"`},
 	}
 
 	for _, d := range data {
@@ -778,6 +778,85 @@ func TestLexer_whitespace(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLexer_separator(t *testing.T) {
+	data := "( ) { } [ ] ; , . ... @ ::"
+
+	for _, str := range strings.Split(data, " ") {
+		withLexer(str, func(lx *Lexer) {
+			tok := lx.separator()
+
+			if tok.Type != Separator {
+				t.Errorf("Expecting a separator token but got %#v", tok.Type)
+			}
+
+			if tok.Value() != str {
+				t.Errorf("Should return %#v instead of %#v",
+					str,
+					tok.Value(),
+				)
+			}
+		})
+	}
+}
+
+func TestLexer_operator(t *testing.T) {
+	data := []struct {
+		collections string
+		sub         SubType
+	}{
+		{"+ - * / %", ArithmeticOperator},                              // 5
+		{"> < >= <= != ==", RelationOperator},                          // 6
+		{"& | ~ ^ >> << >>>", BitwiseOperator},                         // 7
+		{"! && ||", LogicalOperator},                                   // 3
+		{"= += -= *= /= %= &= |= ^= >>= >>= >>>=", AssignmentOperator}, //12
+		{"? :", TernaryOperator},                                       // 2
+		{"->", LambdaOperator},                                         // 1
+		{"++", Incrementoperator},                                      // 1
+		{"--", DecrementOperator},                                      // 1
+	}
+
+	for _, d := range data {
+		for _, op := range strings.Split(d.collections, " ") {
+			withLexer(op, func(lx *Lexer) {
+				tok := lx.operator()
+
+				if tok.Type != Operator {
+					t.Errorf("Expecting a Operator token but got %s", tok.Type)
+				}
+
+				if tok.Sub != d.sub {
+					t.Errorf("Expecting a %s subtype but got %s",
+						d.sub,
+						tok.Sub,
+					)
+				}
+
+				if tok.Value() != op {
+					t.Errorf("Expecting a %s but got %s",
+						op,
+						tok.Value(),
+					)
+				}
+			})
+		}
+	}
+}
+
+func TestLexer_operator_redirectToSeparator(t *testing.T) {
+	withLexer("::", func(lx *Lexer) {
+		tok := lx.operator()
+		if tok.Type != Separator {
+			t.Errorf("The text :: should return a Separator instead of %s",
+				tok.Type,
+			)
+		}
+
+		if tok.Value() != "::" {
+			t.Errorf("Should return a :: instead of %#v", tok.Value())
+		}
+	})
 }
 
 func TestLexer_escapeUnicode_panic(t *testing.T) {
