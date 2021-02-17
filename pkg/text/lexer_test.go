@@ -365,8 +365,7 @@ func TestLexer_identifier(t *testing.T) {
 
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
-			r, _ := lx.nextChar()
-			tok := lx.identifier(r)
+			tok := lx.identifier()
 
 			if d.value != tok.Value() {
 				t.Errorf("Token value does not match, expecting %#v instead of %#v.",
@@ -487,8 +486,7 @@ func TestLexer_numeralLiteral(t *testing.T) {
 	}
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
-			r, _ := lx.nextChar()
-			tok := lx.numeralLiteral(r)
+			tok := lx.numeralLiteral()
 			if tok.Type != d.ttype {
 				t.Errorf("numeralLiteral should return %s on %s.", d.ttype, d.str)
 			}
@@ -767,10 +765,8 @@ func TestLexer_whitespace(t *testing.T) {
 
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
-			var r rune
 			for i := 0; i < d.count; i++ {
-				r, _ = lx.nextChar()
-				lx.whitespace(r)
+				lx.whitespace()
 			}
 
 			if d.expected != lx.pos {

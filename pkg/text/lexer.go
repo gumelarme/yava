@@ -397,34 +397,31 @@ func (lx *Lexer) returnAndReset() (t Token) {
 // will return error on io.EOF
 func (lx *Lexer) NextToken() (Token, error) {
 	for lx.hasNextRune() {
-		r, e := lx.nextChar()
+		p, e := lx.peekChar()
 
 		if e != nil {
 			panic("End of file")
 		}
 
 		switch {
-		case IsWhitespace(r):
+		case IsWhitespace(p):
 			// necessary for counting line number and tabs
-			lx.whitespace(r)
+			lx.whitespace()
 			continue
-		case r == '/':
+		case p == '/':
 			// TODO: should comment returned as token or completely ignored?
-			lx.token.writeRune(r)
 			lx.comment()
-		case IsJavaLetter(r):
-			return lx.identifier(r), nil
-		case IsDigit(r):
-			return lx.numeralLiteral(r), nil
-		case r == '\'':
+		case IsJavaLetter(p):
+			return lx.identifier(), nil
+		case IsDigit(p):
+			return lx.numeralLiteral(), nil
+		case p == '\'':
 			return lx.charLiteral(), nil
-		case r == '"':
+		case p == '"':
 			return lx.stringLiteral(), nil
-		case IsSeparator(r):
-			lx.unicodeQueue.Queue(r)
+		case IsSeparator(p):
 			return lx.separator(), nil
-		case IsOperatorStart(r):
-			lx.unicodeQueue.Queue(r)
+		case IsOperatorStart(p):
 			return lx.operator(), nil
 		}
 	}
@@ -468,7 +465,8 @@ func (lx *Lexer) traditionalComment() {
 		lx.commentTailStar()
 	} else {
 		if IsWhitespace(r) {
-			lx.whitespace(r)
+			lx.unicodeQueue.Queue(r)
+			lx.whitespace()
 		}
 		// recurse and keep searching for asterisk
 		lx.traditionalComment()
@@ -487,7 +485,8 @@ func (lx *Lexer) commentTailStar() {
 		lx.commentTailStar()
 	} else {
 		if IsWhitespace(r) {
-			lx.whitespace(r)
+			lx.unicodeQueue.Queue(r)
+			lx.whitespace()
 		}
 		// recurse and keep searching for asterisk
 		lx.traditionalComment()
@@ -497,8 +496,8 @@ func (lx *Lexer) commentTailStar() {
 // identifier recoginize a valid Java Identifier and Keywords.
 // string first treated as an identifier if its part of java
 // keyword it will correct the TokenType.
-func (lx *Lexer) identifier(r rune) Token {
-	lx.token.writeRune(r)
+func (lx *Lexer) identifier() Token {
+	lx.consume()
 	lx.matchZeroOrMore(IsJavaLetterOrDigit, true)
 	id := lx.token.Value()
 	lx.token.Type = Id
@@ -530,9 +529,10 @@ func (lx *Lexer) consume() {
 // numeralLiteral recognize FloatingPointLiteral and IntegralLiteral
 // in any form. Token will be treated as Integer first, and then
 // change to float if its encounter any float pattern (dot, exponents, etc)
-func (lx *Lexer) numeralLiteral(r rune) Token {
+func (lx *Lexer) numeralLiteral() Token {
 	lx.token.Type = IntegerLiteral
 	lx.token.Sub = Decimal
+	r, _ := lx.nextChar()
 	lx.token.writeRune(r)
 
 	if r != '0' {
@@ -850,9 +850,10 @@ func (lx *Lexer) octalEscape() rune {
 
 // whitespace match the any whitespace
 // it also calculate current position
-func (lx *Lexer) whitespace(r rune) (tok Token) {
+func (lx *Lexer) whitespace() (tok Token) {
 	//TODO: should return token if lx.Buffer is not empty and type is not string
 	//ignore other whitespace except this two
+	r, _ := lx.nextChar()
 	if r == '\n' || r == '\r' {
 		lx.lineTerminator(r)
 	} else if r == '\t' {
