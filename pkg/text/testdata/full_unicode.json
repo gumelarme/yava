@@ -1,0 +1,39 @@
+[
+    {"position": {"linum":1, "column":0}, "value": "class", "type": 2, "subtype": 0},
+    {"position": {"linum":1, "column":31}, "value": "HelloWorld", "type": 1, "subtype": 0},
+    {"position": {"linum":1, "column":92}, "value": "{", "type": 4, "subtype": 0},
+
+    {"position": {"linum":2, "column":2}, "value": "public", "type": 2, "subtype": 0},
+    {"position": {"linum":2, "column":39}, "value": "static", "type": 2, "subtype": 0},
+    {"position": {"linum":2, "column":76}, "value": "void", "type": 2, "subtype": 0},
+    {"position": {"linum":2, "column":101}, "value": "main", "type": 1, "subtype": 0},
+    {"position": {"linum":2, "column":125}, "value": "(", "type": 4, "subtype": 0},
+    {"position": {"linum":2, "column":131}, "value": "String", "type": 1, "subtype": 0},
+    {"position": {"linum":2, "column":167}, "value": "[", "type": 4, "subtype": 0},
+    {"position": {"linum":2, "column":173}, "value": "]", "type": 4, "subtype": 0},
+    {"position": {"linum":2, "column":180}, "value": "args", "type": 1, "subtype": 0},
+    {"position": {"linum":2, "column":204}, "value": ")", "type": 4, "subtype": 0},
+    {"position": {"linum":2, "column":211}, "value": "{", "type": 4, "subtype": 0},
+
+    {"position": {"linum":3, "column":4}, "value": "int", "type": 2, "subtype": 0},
+    {"position": {"linum":3, "column":23}, "value": "a", "type": 1, "subtype": 0},
+    {"position": {"linum":3, "column":30}, "value": "=", "type": 3, "subtype": 9},
+    {"position": {"linum":3, "column":37}, "value": "1", "type": 6, "subtype": 1},
+    {"position": {"linum":3, "column":44}, "value": "+", "type": 3, "subtype": 5},
+    {"position": {"linum":3, "column":51}, "value": "2", "type": 6, "subtype": 1},
+    {"position": {"linum":3, "column":57}, "value": ";", "type": 4, "subtype": 0},
+
+    {"position": {"linum":4, "column":4}, "value": "System", "type": 1, "subtype": 0},
+    {"position": {"linum":4, "column":40}, "value": ".", "type": 4, "subtype": 0},
+    {"position": {"linum":4, "column":46}, "value": "out", "type": 1, "subtype": 0},
+    {"position": {"linum":4, "column":64}, "value": ".", "type": 4, "subtype": 0},
+    {"position": {"linum":4, "column":70}, "value": "println", "type": 1, "subtype": 0},
+    {"position": {"linum":4, "column":112}, "value": "(", "type": 4, "subtype": 0},
+    {"position": {"linum":4, "column":118}, "value": "a", "type": 1, "subtype": 0},
+    {"position": {"linum":4, "column":124}, "value": ")", "type": 4, "subtype": 0},
+    {"position": {"linum":4, "column":130}, "value": ";", "type": 4, "subtype": 0},
+
+    {"position": {"linum":5, "column":2}, "value": "}", "type": 4, "subtype": 0},
+
+    {"position": {"linum":6, "column":0}, "value": "}", "type": 4, "subtype": 0}
+]

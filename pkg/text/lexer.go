@@ -9,13 +9,14 @@ import (
 )
 
 // Hold position value, both must be
+// Linum start from 1, Column start from 0
 type Position struct {
-	Linum  uint // start from 1
-	Column uint // start from 0
+	Linum  uint `json:"linum"`
+	Column uint `json:"column"`
 }
 
 func (p Position) String() string {
-	return fmt.Sprintf("[%d:%d]", p.Linum, p.Column)
+	return fmt.Sprintf("%d:%d", p.Linum, p.Column)
 }
 
 // TabLength hold how much space a tab equal to.
@@ -105,21 +106,45 @@ func (s SubType) String() string {
 
 // Token represent a string pattern recoginized by the lexer
 type Token struct {
-	Position
-	Type       TokenType
-	Sub        SubType         // value should remain None unless its TokenType is Float or Integer
+	Position   `json:"position"`
+	Type       TokenType       `json:"type"`
+	Sub        SubType         `json:"subtype"` // value should remain None unless its TokenType is Float or Integer
 	strBuilder strings.Builder // hold the string later retruned via Value()
+}
+
+// an alias for Token used for marshalling
+// used for testing purposes
+type jsonToken struct {
+	Position `json:"position"`
+	Type     TokenType `json:"type"`
+	Sub      SubType   `json:"subtype"`
+	Value    string    `json:"value"`
+}
+
+// Token convert jsonToken to Token
+func (t jsonToken) Token() (tok Token) {
+	tok.strBuilder.WriteString(t.Value)
+	tok.Position = t.Position
+	tok.Type = t.Type
+	tok.Sub = t.Sub
+	return
 }
 
 //TODO: should it moved to lexer_test
 // newToken provide non-verbose Token creation for testing purposes
 func newToken(linum, col uint, s string, tt TokenType) (t Token) {
-	t.Position.Linum = linum
-	t.Position.Column = col
+	t.Linum = linum
+	t.Column = col
 	t.Type = tt
 	t.Sub = None
 	t.writeString(s)
 	return
+}
+
+func newTokenSub(linum, col uint, s string, tt TokenType, st SubType) Token {
+	tok := newToken(linum, col, s, tt)
+	tok.Sub = st
+	return tok
 }
 
 // writeRune append rune to token value
@@ -149,9 +174,33 @@ func (t *Token) Value() string {
 	return t.strBuilder.String()
 }
 
+func (t Token) Equal(tok Token) bool {
+	invalid := t.Value() != tok.Value() ||
+		t.Column != tok.Column ||
+		t.Linum != tok.Linum ||
+		t.Type != tok.Type ||
+		t.Sub != tok.Sub
+
+	if invalid {
+		return false
+	}
+
+	return true
+}
+
 // String return the friendlier string representation of Token
 func (t Token) String() string {
-	return fmt.Sprintf("<%s>%s %#v", t.Type.String(), t.Position.String(), t.Value())
+	var str strings.Builder
+	str.WriteString(t.Type.String())
+	if t.Sub != None {
+		str.WriteString(" :" + t.Sub.String())
+	}
+
+	return fmt.Sprintf("%s <%s> `%v`",
+		t.Position.String(),
+		str.String(),
+		t.Value(),
+	)
 }
 
 // type TokenIdentifier func(r rune) (string, TokenType)
@@ -224,14 +273,17 @@ func (q *queue) Len() int {
 type Lexer struct {
 	Scanner      Scanner
 	pos          Position
+	rawPos       Position
 	token        Token
 	unicodeQueue queue // hold the value of decoded unicode string
+	startPos     Position
 }
 
 // NewLexer create a new object of lexer
 func NewLexer(scan Scanner) (lx Lexer) {
 	lx.Scanner = scan
 	lx.pos = Position{1, 0}
+	lx.rawPos = Position{1, 0}
 	return
 }
 
@@ -272,7 +324,8 @@ func (lx *Lexer) runeGetter() (r rune, err error) {
 // and advance the pointer
 func (lx *Lexer) nextChar() (r rune, err error) {
 	r, err = lx.runeGetter()
-	lx.pos.Column += 1
+	lx.rawPos.Column += 1
+	lx.pos = lx.rawPos
 	return
 }
 
@@ -301,15 +354,17 @@ func (lx *Lexer) errf(str string) string {
 func (lx *Lexer) escapeUnicode() rune {
 	// temporarly save current Token, and reassign it at the end
 	curToken := lx.token
+	lx.token.clear()
 	defer func() {
 		lx.token = curToken
 	}()
 
 	lx.token.writeRune('\\')
-	// one or more u after backslash is accepted
 	lx.matchOneOrMore(func(r rune) bool {
 		return r == 'u'
 	}, false)
+
+	lx.rawPos.Column += uint(len(lx.token.Value()) - 1) //start form zero
 
 	// strconv.UnquoteChar is not accepting multiple 'u' on unicode sequence, but java does
 	// so up there we accept all the 'u' but reset it here
@@ -329,6 +384,7 @@ func (lx *Lexer) escapeUnicode() rune {
 		panic(lx.errf("Error while reading isEscaped unicode."))
 	}
 
+	lx.rawPos.Column += 4
 	return v
 }
 
@@ -372,25 +428,38 @@ func (lx *Lexer) matchOneOrMore(match Matcher, unicodeEscaped bool) (valid bool)
 // matchExact will try to match n times
 // if number of match < n it return false
 func (lx *Lexer) matchExact(match Matcher, n int, escaped bool) bool {
-	peek, _ := lx.getPeekAndNext(escaped)
+	peek, next := lx.getPeekAndNext(escaped)
+	var buffer []rune
+	isOk := true
 	for i := 0; i < n; i++ {
 		t, _ := peek()
 		if t == 0 || !match(t) {
-			return false
-		} else {
-			lx.consume()
+			isOk = false
+			break
+		} else if t != 0 {
+			r, _ := next()
+			buffer = append(buffer, r)
 		}
 	}
 
+	if !isOk {
+		for _, r := range buffer {
+			lx.unicodeQueue.Queue(r)
+		}
+		return false
+	}
+
+	lx.token.writeString(string(buffer))
 	return true
 }
 
 // returnAndReset return the current token and reset the state
 func (lx *Lexer) returnAndReset() (t Token) {
 	t = lx.token
-	t.Position = lx.pos
+	t.Position = lx.startPos
+	// lx.pos = lx.rawPos
 	lx.token.reset()
-	return t
+	return
 }
 
 // NextToken return the next token on each call
@@ -398,6 +467,7 @@ func (lx *Lexer) returnAndReset() (t Token) {
 func (lx *Lexer) NextToken() (Token, error) {
 	for lx.hasNextRune() {
 		p, e := lx.peekChar()
+		lx.startPos = lx.pos
 
 		if e != nil {
 			panic("End of file")
@@ -411,6 +481,7 @@ func (lx *Lexer) NextToken() (Token, error) {
 		case p == '/':
 			// TODO: should comment returned as token or completely ignored?
 			lx.comment()
+			continue
 		case IsJavaLetter(p):
 			return lx.identifier(), nil
 		case IsDigit(p):
@@ -431,6 +502,7 @@ func (lx *Lexer) NextToken() (Token, error) {
 // comment recognize the comment pattern in Java,
 // both the single line and multiline are recognized.
 func (lx *Lexer) comment() {
+	lx.consume()
 	r, _ := lx.nextChar()
 	lx.token.writeRune(r)
 	if r == '/' {
@@ -438,7 +510,7 @@ func (lx *Lexer) comment() {
 	} else if r == '*' {
 		lx.traditionalComment()
 	}
-	lx.token.reset()
+	lx.returnAndReset()
 }
 
 // endOfLineComment recognize the single line Java comment
@@ -461,10 +533,12 @@ func (lx *Lexer) traditionalComment() {
 		panic("Comment is not closed with */")
 	}
 
+	lx.token.writeRune(r)
 	if r == '*' {
 		lx.commentTailStar()
 	} else {
 		if IsWhitespace(r) {
+			lx.rawPos.Column -= 1
 			lx.unicodeQueue.Queue(r)
 			lx.whitespace()
 		}
@@ -478,6 +552,7 @@ func (lx *Lexer) traditionalComment() {
 func (lx *Lexer) commentTailStar() {
 	r, _ := lx.nextChar()
 
+	lx.token.writeRune(r)
 	// end of a comment
 	if r == '/' {
 		return
@@ -570,9 +645,7 @@ func (lx *Lexer) numeralLiteral() Token {
 
 	lx.numeralSuffix()
 
-	t := lx.token
-	lx.token.clear()
-	return t
+	return lx.returnAndReset()
 }
 
 // numeralSuffix try to match float or long suffixes.
@@ -766,6 +839,7 @@ func (lx *Lexer) stringLiteral() (t Token) {
 // charLiteral recognize literal char value
 // TODO: should escaped sequence return the real values
 // or keep the literal and process it in the parser
+
 func (lx *Lexer) charLiteral() Token {
 	lx.nextChar() // throw out the opening quote
 
@@ -816,7 +890,6 @@ func (lx *Lexer) escapeSequence() rune {
 // octalEscape match an octal escape sequence
 // and return the real character
 func (lx *Lexer) octalEscape() rune {
-
 	// if first digit is 0-3 then it will
 	// match up to 3 digit, otherwise (4-7)
 	// only 2 digit are allowed, and match the
@@ -857,7 +930,9 @@ func (lx *Lexer) whitespace() (tok Token) {
 	if r == '\n' || r == '\r' {
 		lx.lineTerminator(r)
 	} else if r == '\t' {
-		lx.pos.Column += TabLength - 1 // counted by nextRune
+		// lx.pos.Column += TabLength - 1    // counted by nextRune
+		lx.rawPos.Column += TabLength - 1 // counted by nextRune
+		lx.pos.Column += TabLength - 1
 	}
 	return
 }
@@ -868,6 +943,7 @@ func (lx *Lexer) lineTerminator(r rune) {
 	if r == '\n' {
 		lx.pos.Column = 0
 		lx.pos.Linum += 1
+		lx.rawPos = lx.pos
 	} else if r == '\r' {
 		n, _ := lx.nextChar()
 		if n != '\n' {
@@ -885,6 +961,7 @@ func (lx *Lexer) separator() Token {
 	if !IsSeparator(r) {
 		if r == ':' {
 			if p, _ := lx.peekChar(); p == ':' {
+				lx.nextChar()
 				lx.token.writeString("::")
 				lx.token.Type = Separator
 			}

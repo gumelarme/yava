@@ -135,8 +135,8 @@ func TestStringScannerName(t *testing.T) {
 
 var testDir = "./testdata/"
 var testFiles = []string{
-	"Hello.java",
-	"HelloUnicode.java",
+	"mixed_ascii_unicode.java",
+	"chinese_char.java",
 }
 
 type readerScanner struct {

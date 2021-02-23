@@ -30,7 +30,7 @@ func IsJavaLetterOrDigit(r rune) bool {
 	return !IsWhitespace(r) &&
 		!IsSeparator(r) &&
 		!IsOperatorStart(r) &&
-		!IsRuneIn(r, "#`")
+		!IsRuneIn(r, "#`\"'")
 
 }
 

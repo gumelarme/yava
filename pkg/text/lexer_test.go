@@ -24,8 +24,8 @@ func TestPositionString(t *testing.T) {
 		col      uint
 		expected string
 	}{
-		{1, 0, "[1:0]"},
-		{3, 120, "[3:120]"},
+		{1, 0, "1:0"},
+		{3, 120, "3:120"},
 	}
 
 	for _, d := range data {
@@ -55,14 +55,15 @@ func TestTokenTypeString(t *testing.T) {
 }
 
 func TestTokenString(t *testing.T) {
+
 	data := []struct {
 		token    Token
 		expected string
 	}{
-		{newToken(1, 0, "int", Keyword), `<Keyword>[1:0] "int"`},
-		{newToken(3, 120, "null", NullLiteral), `<NullLiteral>[3:120] "null"`},
-		{newToken(1334, 133, "variable", Id), `<Id>[1334:133] "variable"`},
-		{newToken(1231, 3, ">>", Operator), `<Operator>[1231:3] ">>"`},
+		{newToken(1, 0, "int", Keyword), "1:0 <Keyword> `int`"},
+		{newToken(3, 120, "null", NullLiteral), "3:120 <NullLiteral> `null`"},
+		{newToken(1334, 133, "variable", Id), "1334:133 <Id> `variable`"},
+		{newTokenSub(1231, 3, ">>", Operator, BitwiseOperator), "1231:3 <Operator :BitwiseOperator> `>>`"},
 	}
 
 	for _, d := range data {
@@ -209,9 +210,9 @@ func TestLexer_comment(t *testing.T) {
 		str      string
 		expected rune
 	}{
-		{`/nice thing
+		{`//nice thing
 hello`, 'h'},
-		{`* nice thing */not a comment`, 'n'},
+		{`/* nice thing */not a comment`, 'n'},
 	}
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
@@ -219,8 +220,8 @@ hello`, 'h'},
 			r, _ := lx.nextChar()
 			if r != d.expected {
 				t.Errorf("traditionalComment should end at backslash, expected %#v instead of %#v.",
-					string(r),
 					string(d.expected),
+					string(r),
 				)
 			}
 		})
@@ -247,10 +248,10 @@ func TestLexer_traditionalComment(t *testing.T) {
 		str      string
 		expected rune
 	}{
-		{"*/nicething", 'n'},
-		{"nice thing */ thing", ' '},
-		{"*****/thing", 't'},
-		{`
+		{"/**/nicething", 'n'},
+		{"/*nice thing */ thing", ' '},
+		{"/*****/thing", 't'},
+		{`/*
 */thing`, 't'},
 	}
 	for _, d := range data {

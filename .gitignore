@@ -2,5 +2,6 @@ debug.test
 changes.org
 *.out
 *.html
+*.class
 _java_scratch_file_/*
 TAGS
