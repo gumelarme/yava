@@ -52,6 +52,17 @@ func TestLexer_NextToken_text(t *testing.T) {
 			},
 		},
 		{
+			"person.size = .32f;",
+			[]Token{
+				newToken(1, 0, "person", Id),
+				newToken(1, 6, ".", Separator),
+				newToken(1, 7, "size", Id),
+				newTokenSub(1, 12, "=", Operator, AssignmentOperator),
+				newTokenSub(1, 14, ".32f", FloatingPointLiteral, Decimal),
+				newToken(1, 18, ";", Separator),
+			},
+		},
+		{
 			`str = "Value: " + (0xff + 20.3f) + obj.getSuffix();`,
 			[]Token{
 				newToken(1, 0, "str", Id),
@@ -180,3 +191,26 @@ func TestLexer_NextToken_file(t *testing.T) {
 		})
 	}
 }
+
+// func TestLexer_NextToken_panic(t *testing.T) {
+// 	data := []string{
+// 		//incomplete
+// 		`"something`,
+// 		`'s`,
+// 		//illegal syntax
+// 		`'nice'`,
+// 		`0x`,
+// 		`0b`,
+// 		`09`, // illegal octal
+// 	}
+
+// 	for _, str := range data {
+// 		withLexer(str, func(lx *Lexer) {
+// 			msg := fmt.Sprintf("Should panic on %s", str)
+// 			defer assertPanic(t, msg)
+
+// 			tok, _ := lx.NextToken()
+// 			fmt.Println(tok)
+// 		})
+// 	}
+// }

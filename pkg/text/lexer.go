@@ -243,7 +243,11 @@ type queue struct {
 
 // Queue append and item into the end of the slice
 func (q *queue) Queue(item rune) {
-	q.slice = append(q.slice, item)
+	if len(q.slice) > 0 {
+		q.slice = append([]rune{item}, q.slice...)
+	} else {
+		q.slice = append(q.slice, item)
+	}
 }
 
 // Dequeue return the first element in the slice and then delete it
@@ -607,25 +611,57 @@ func (lx *Lexer) consume() {
 func (lx *Lexer) numeralLiteral() Token {
 	lx.token.Type = IntegerLiteral
 	lx.token.Sub = Decimal
-	r, _ := lx.nextChar()
-	lx.token.writeRune(r)
 
-	if r != '0' {
-		lx.separatedByUnderscore(IsNonZeroDigit)
-	} else {
+	defer func() {
+		err := recover()
+		if err == nil {
+			return
+		}
+
+		// FIXME: Show more helpful messages
+		msg := fmt.Sprintf("`%s` Illegal syntax of %s %s.\n%s",
+			lx.token.Value(),
+			lx.token.Sub,
+			lx.token.Type,
+			err,
+		)
+
+		panic(lx.errf(msg))
+	}()
+
+	r, e := lx.peekChar()
+	if e != nil {
+		panic("End of file nothing to read here")
+	}
+
+	if r > '0' && r <= '9' {
+		lx.consume()
+		lx.separatedByUnderscore(IsNonZeroDigit, false)
+	} else if r != '.' {
+		lx.consume()
 		p, _ := lx.peekChar()
 		switch {
 		case IsRuneIn(p, "Xx"):
-			lx.consume()
-			lx.separatedByUnderscore(IsHexDigit)
 			lx.token.Sub = Hex
-		case IsRuneIn(p, "Bb"):
 			lx.consume()
-			lx.separatedByUnderscore(IsBinaryDigit)
+
+			// 0x.BEEF is a valid float literal
+			// but 0x is invalid integer literal
+			if p, _ := lx.peekChar(); p != '.' {
+				lx.separatedByUnderscore(IsHexDigit, true)
+			}
+
+		case IsRuneIn(p, "Bb"):
 			lx.token.Sub = Binary
-		case IsOctalDigit(p):
-			lx.separatedByUnderscore(IsOctalDigit)
-			lx.token.Sub = Octal
+			lx.consume()
+			lx.separatedByUnderscore(IsBinaryDigit, true)
+		case IsDigit(p):
+			if IsOctalDigit(p) {
+				lx.token.Sub = Octal
+				lx.separatedByUnderscore(IsOctalDigit, true)
+			} else {
+				panic("Integer are too large.")
+			}
 		}
 	}
 
@@ -687,13 +723,13 @@ func (lx *Lexer) floatFractional() {
 
 // floatDecimalFractional match the fraction part of a decimal number
 func (lx *Lexer) floatDecimalFractional() {
-	lx.separatedByUnderscore(IsDigit)
+	lx.separatedByUnderscore(IsDigit, false)
 	lx.exponentPart()
 }
 
 // floatHexFractional match the fraction part of a hexadecimal number
 func (lx *Lexer) floatHexFractional() {
-	lx.separatedByUnderscore(IsHexDigit)
+	lx.separatedByUnderscore(IsHexDigit, false)
 	lx.binaryExponentPart()
 }
 
@@ -726,7 +762,8 @@ func (lx *Lexer) signedInteger() {
 	lx.matchExact(func(r rune) bool {
 		return r == '+' || r == '-'
 	}, 1, true)
-	lx.separatedByUnderscore(IsDigit)
+
+	lx.separatedByUnderscore(IsDigit, true)
 }
 
 // separatedByUnderscore will match the provided matcher with
@@ -734,15 +771,20 @@ func (lx *Lexer) signedInteger() {
 // example of isDigit as matcher:
 // Valid: 1, 1_2, 1_2_3, 1__2, 1__2_3
 // Invalid: _, _1, 1_, _1_
-func (lx *Lexer) separatedByUnderscore(matcher Matcher) {
+func (lx *Lexer) separatedByUnderscore(matcher Matcher, atLeastOne bool) {
 	isUnderscore := func(r rune) bool {
 		return r == '_'
 	}
 
-	lx.matchOneOrMore(matcher, true)
+	matched := lx.matchOneOrMore(matcher, true)
+
+	if atLeastOne && !matched {
+		panic("Should at least match one digit.")
+	}
+
 	// if underscore is matched then it has trailing underscore
 	if lx.matchOneOrMore(isUnderscore, true) {
-		lx.separatedByUnderscore(matcher)
+		lx.separatedByUnderscore(matcher, true)
 	}
 }
 
@@ -956,6 +998,7 @@ func (lx *Lexer) lineTerminator(r rune) {
 }
 
 // separator match Java separator
+// can redirect to numeralLiteral if a dot followed by a digit
 func (lx *Lexer) separator() Token {
 	r, _ := lx.nextChar()
 	if !IsSeparator(r) {
@@ -971,6 +1014,16 @@ func (lx *Lexer) separator() Token {
 
 	lx.token.writeRune(r)
 	if r == '.' {
+
+		// catching a float
+		p, _ := lx.peekChar()
+		if IsDigit(p) {
+			lx.token.clear()
+			lx.rawPos.Column -= 1
+			lx.unicodeQueue.Queue(r)
+			return lx.numeralLiteral()
+		}
+
 		isMatch := lx.matchExact(func(r rune) bool {
 			return r == '.'
 		}, 2, true)

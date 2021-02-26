@@ -13,11 +13,6 @@ type testData struct {
 	rest        string
 }
 
-var data = [...]testData{
-	{"12345", 3, '4', "5"},
-	{"Hello", 2, 'l', "lo"},
-}
-
 func TestPositionString(t *testing.T) {
 	data := []struct {
 		linum    uint
@@ -80,11 +75,28 @@ func fillQueue(q *queue, s string) {
 }
 
 func TestQueue_Queue(t *testing.T) {
+	var data = [...]testData{
+		{"12345", 3, '4', "5"},
+		{"Hello", 2, 'l', "lo"},
+	}
+
+	reverse := func(s string) string {
+		length := len(s)
+		newStr := make([]rune, length)
+		rs := []rune(s)
+		for i, j := length-1, 0; i >= 0; i-- {
+			newStr[j] = rs[i]
+			j++
+		}
+		return string(newStr)
+	}
+
 	for _, d := range data {
 		// queue all char from the value
 		var q queue
 		fillQueue(&q, d.value)
-		if r := string(q.slice); r != d.value {
+
+		if r := string(q.slice); r != reverse(d.value) {
 			t.Errorf("Queue data should be %#v, instead got %#v.", d.value, r)
 		}
 
@@ -95,6 +107,10 @@ func TestQueue_Queue(t *testing.T) {
 }
 
 func TestQueue_Dequeue(t *testing.T) {
+	var data = [...]testData{
+		{"12345", 3, '2', "1"},
+		{"Hello", 2, 'l', "eH"},
+	}
 	for _, d := range data {
 		// queue all char from the value
 		var q queue
@@ -126,6 +142,10 @@ func TestQueue_Dequeue(t *testing.T) {
 }
 
 func TestQueue_DequeueError(t *testing.T) {
+	var data = [...]testData{
+		{"12345", 3, '4', "5"},
+		{"Hello", 2, 'l', "lo"},
+	}
 	for _, d := range data {
 		// queue all char from the value
 		var q queue
@@ -487,6 +507,11 @@ func TestLexer_numeralLiteral(t *testing.T) {
 	}
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("Panicked on %s \n%s ", d.str, r)
+				}
+			}()
 			tok := lx.numeralLiteral()
 			if tok.Type != d.ttype {
 				t.Errorf("numeralLiteral should return %s on %s.", d.ttype, d.str)
@@ -495,6 +520,34 @@ func TestLexer_numeralLiteral(t *testing.T) {
 			if tok.Value() != d.str {
 				t.Errorf("numeralLiteral not consuming all the character on %#v, instead returning %#v", d.str, tok.Value())
 			}
+		})
+	}
+}
+
+func TestLexer_numeralLiteral_panic(t *testing.T) {
+	data := []string{
+		// should atleast contain 1 digit
+		"0x",
+		"0b",
+		// non octal digit
+		"09",
+		"08",
+		// underscore should be in between numbers
+		"0b_",
+		"0b1_",
+		"0b_1",
+		// incomplete exponent followed by signed integer
+		"12e",
+		"0e",
+		"12e+",
+		"12e-",
+		".3e-",
+	}
+
+	for _, str := range data {
+		withLexer(str, func(lx *Lexer) {
+			defer assertPanic(t, "Should panic on "+str)
+			lx.numeralLiteral()
 		})
 	}
 }
@@ -852,6 +905,23 @@ func TestLexer_operator_redirectToSeparator(t *testing.T) {
 
 		if tok.Value() != "::" {
 			t.Errorf("Should return a :: instead of %#v", tok.Value())
+		}
+	})
+}
+
+func TestLexer_separator_redirectToNumeralLiteral(t *testing.T) {
+	str := ".123"
+	withLexer(str, func(lx *Lexer) {
+		tok := lx.separator()
+		if tok.Type != FloatingPointLiteral {
+			t.Errorf("The text %s should return a FloatingPointLiteral instead of %s",
+				str,
+				tok.Type,
+			)
+		}
+
+		if tok.Value() != str {
+			t.Errorf("Should return a %s instead of %#v", str, tok.Value())
 		}
 	})
 }
