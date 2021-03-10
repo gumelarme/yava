@@ -46,7 +46,7 @@ func IsDigit(r rune) bool {
 
 // IsSeparator check if rune is a Java separator
 func IsSeparator(r rune) bool {
-	return IsRuneIn(r, "(){}[];,.@")
+	return IsRuneIn(r, "(){}[];,.")
 }
 
 // IsOperatorStart check if runeis a start of a Java operator

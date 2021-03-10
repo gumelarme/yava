@@ -4,7 +4,7 @@ parser:
 test: test_text
 
 test_text:
-	go test -v ./pkg/text
+	go test -tags integration ./pkg/text
 
 cov_html: cov
 	go tool cover -html=cover.out
