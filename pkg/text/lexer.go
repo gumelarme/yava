@@ -364,6 +364,8 @@ type Lexer struct {
 	token        Token
 	unicodeQueue queue // hold the value of decoded unicode string
 	startPos     Position
+	tokenBuffer  *Token
+	errorBuffer  error
 }
 
 // NewLexer create a new object of lexer
@@ -551,7 +553,7 @@ func (lx *Lexer) returnAndReset() (t Token) {
 
 // NextToken return the next token on each call
 // will return error on io.EOF
-func (lx *Lexer) NextToken() (Token, error) {
+func (lx *Lexer) getNext() (Token, error) {
 	for lx.hasNextRune() {
 		p, e := lx.peekChar()
 		lx.startPos = lx.pos
@@ -584,6 +586,22 @@ func (lx *Lexer) NextToken() (Token, error) {
 		}
 	}
 	return Token{}, io.EOF
+}
+
+func (lx *Lexer) NextToken() (Token, error) {
+	if lx.tokenBuffer != nil {
+		tok, err := *lx.tokenBuffer, lx.errorBuffer
+		lx.tokenBuffer = nil
+		lx.errorBuffer = nil
+		return tok, err
+	}
+	return lx.getNext()
+}
+
+func (lx *Lexer) PeekToken() (Token, error) {
+	tok, err := lx.NextToken()
+	lx.tokenBuffer, lx.errorBuffer = &tok, err
+	return tok, err
 }
 
 // comment recognize the comment pattern in Java,

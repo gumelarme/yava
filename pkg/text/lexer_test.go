@@ -194,6 +194,23 @@ func TestLexer_nextRune(t *testing.T) {
 
 }
 
+func TestLexer_PeekToken(t *testing.T) {
+	str, expected := "class", newToken(1, 0, "class", Keyword)
+	withLexer(str, func(lx *Lexer) {
+		for i := 0; i < 3; i++ {
+			tok, _ := lx.PeekToken()
+			if !tok.Equal(expected) {
+				t.Error("Peek should still be the same after multiple calls")
+				fmt.Println(tok, expected)
+			}
+
+			if lx.tokenBuffer == nil {
+				t.Error("tokenBuffer should have token after peeking, got nil")
+			}
+		}
+	})
+}
+
 func TestLexer_lineTerminator(t *testing.T) {
 	data := []struct {
 		str      string
