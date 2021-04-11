@@ -32,7 +32,6 @@ const (
 	Keyword           // listed below
 	Comment
 	IntegerLiteral
-	FloatingPointLiteral
 	StringLiteral
 	CharLiteral
 	BooleanLiteral // true false
@@ -53,8 +52,6 @@ const (
 	Multiplication // *
 	Division       // /
 	Modulus        // %
-	Increment      // ++
-	Decrement      // 00
 	// Relation
 	LessThan         // <
 	GreaterThan      // >
@@ -62,34 +59,17 @@ const (
 	GreaterThanEqual // >=
 	Equal            // ==
 	NotEqual         // !=
-	// Bitwise
-	BitAnd             // &
-	BitOr              // |
-	BitExOr            // ^
-	BitComplement      // ~
-	LeftShift          // <<
-	RightShift         // >>
-	UnsignedRightShift // >>>
 	// Logical
 	And // &&
 	Or  // ||
 	Not // !
 	// Assignment
-	Assignment                   // ==
-	AdditionAssignment           // +=
-	SubtractionAssignment        // -=
-	MultiplicationAssignment     // *=
-	DivisionAssignment           // /=
-	ModulusAssignment            // %=
-	LeftShiftAssignment          // <<=
-	RightShiftAssignment         // >>=
-	UnsignedRightShiftAssignment // >>>=
-	BitAndAssignment             // &=
-	BitOrAssignment              // |=
-	BitExOrAssignment            // ^=
-	// Ternary
-	QuestionMark // ?
-	Colon        // :
+	Assignment               // ==
+	AdditionAssignment       // +=
+	SubtractionAssignment    // -=
+	MultiplicationAssignment // *=
+	DivisionAssignment       // /=
+	ModulusAssignment        // %=
 )
 
 // return the string representation of the TokenType
@@ -100,7 +80,6 @@ func (t TokenType) String() string {
 		"Keyword",
 		"Comment",
 		"IntegerLiteral",
-		"FloatingPointLiteral",
 		"StringLiteral",
 		"CharLiteral",
 		"BooleanLiteral",
@@ -120,9 +99,7 @@ func (t TokenType) String() string {
 		"Subtract",
 		"Multiply",
 		"Divide",
-		"Mod",
-		"Increment",
-		"Decrement",
+		"Modulus",
 		// Relation
 		"LessThan",
 		"GreaterThan",
@@ -130,14 +107,6 @@ func (t TokenType) String() string {
 		"GreaterThanEqual",
 		"Equal",
 		"NotEqual",
-		// Bitwise
-		"BitAnd",
-		"BitOr",
-		"BitExOr",
-		"BitComplement",
-		"LeftShift",
-		"RightShift",
-		"UnsignedRightShift",
 		// Logical
 		"And",
 		"Or",
@@ -149,15 +118,6 @@ func (t TokenType) String() string {
 		"MultiplicationAssignment",
 		"DivisionAssignment",
 		"ModAssignment",
-		"LeftShiftAssignment",
-		"RightShiftAssignment",
-		"UnsignedRightShiftAssignment",
-		"BitAndAssignment",
-		"BitOrAssignment",
-		"BitExOrAssignment",
-		// Ternary
-		"QuestionMark",
-		"Colon",
 	}[t]
 }
 
@@ -766,105 +726,7 @@ func (lx *Lexer) numeralLiteral() Token {
 		}
 	}
 
-	// check if float
-	p, _ := lx.peekChar()
-	switch {
-	case p == '.' && (lx.token.Sub == Hex || lx.token.Sub == Decimal):
-		lx.consume()
-		lx.floatFractional()
-
-	case lx.token.Sub == Decimal && IsRuneIn(p, "Ee"):
-		lx.exponentPart()
-
-	case lx.token.Sub == Hex && IsRuneIn(p, "Pp"):
-		lx.binaryExponentPart()
-	}
-
-	lx.numeralSuffix()
-
 	return lx.returnAndReset()
-}
-
-// numeralSuffix try to match float or long suffixes.
-// if TokenType is integer it  match both
-// float and long suffixes, and if its already float
-// it only match the float suffix.
-func (lx *Lexer) numeralSuffix() {
-	floatSuffix := "fFdD"
-	longSuffix := "lL"
-
-	match := func(s string) bool {
-		return lx.matchExact(func(r rune) bool {
-			return IsRuneIn(r, s)
-		}, 1, true)
-	}
-
-	if lx.token.Type == FloatingPointLiteral {
-		match(floatSuffix)
-	} else if lx.token.Type == IntegerLiteral {
-		if match(floatSuffix) {
-			lx.token.Type = FloatingPointLiteral
-		} else {
-			match(longSuffix)
-		}
-	}
-}
-
-// floatFractional match the fractional part of a numeralLiteral
-func (lx *Lexer) floatFractional() {
-	if lx.token.Sub == Decimal {
-		lx.floatDecimalFractional()
-	} else if lx.token.Sub == Hex {
-		lx.floatHexFractional()
-	} else {
-		panic("Only Decimal and Hexadecimal are allowed for float.")
-	}
-	lx.token.Type = FloatingPointLiteral
-}
-
-// floatDecimalFractional match the fraction part of a decimal number
-func (lx *Lexer) floatDecimalFractional() {
-	lx.separatedByUnderscore(IsDigit, false)
-	lx.exponentPart()
-}
-
-// floatHexFractional match the fraction part of a hexadecimal number
-func (lx *Lexer) floatHexFractional() {
-	lx.separatedByUnderscore(IsHexDigit, false)
-	lx.binaryExponentPart()
-}
-
-// exponentPart match the decimal exponent pattern
-func (lx *Lexer) exponentPart() {
-	lx.token.Type = FloatingPointLiteral
-	exponentIndicator := lx.matchExact(func(r rune) bool {
-		return IsRuneIn(r, "Ee")
-	}, 1, true)
-
-	if exponentIndicator {
-		lx.signedInteger()
-	}
-}
-
-// exponentPart match the binary exponent pattern for the hexadecimal form of float
-func (lx *Lexer) binaryExponentPart() {
-	lx.token.Type = FloatingPointLiteral
-	exponentIndicator := lx.matchExact(func(r rune) bool {
-		return IsRuneIn(r, "Pp")
-	}, 1, true)
-
-	if exponentIndicator {
-		lx.signedInteger()
-	}
-}
-
-// signedInteger match a signed integer pattern
-func (lx *Lexer) signedInteger() {
-	lx.matchExact(func(r rune) bool {
-		return r == '+' || r == '-'
-	}, 1, true)
-
-	lx.separatedByUnderscore(IsDigit, true)
 }
 
 // separatedByUnderscore will match the provided matcher with
@@ -1114,30 +976,16 @@ var separatorMap = map[rune]TokenType{
 func (lx *Lexer) separator() Token {
 	r, _ := lx.nextChar()
 	lx.token.writeRune(r)
-	if r == '.' {
-
-		// catching a float
-		p, _ := lx.peekChar()
-		if IsDigit(p) {
-			lx.token.clear()
-			lx.rawPos.Column -= 1
-			lx.unicodeQueue.Queue(r)
-			return lx.numeralLiteral()
-		}
-	}
-
 	lx.token.Type = separatorMap[r]
 	return lx.returnAndReset()
 }
 
 var operatorMap = map[string]TokenType{
-	"+":  Addition,
-	"-":  Subtraction,
-	"*":  Multiplication,
-	"/":  Division,
-	"%":  Modulus,
-	"++": Increment,
-	"--": Decrement,
+	"+": Addition,
+	"-": Subtraction,
+	"*": Multiplication,
+	"/": Division,
+	"%": Modulus,
 	// Relation
 	"<":  LessThan,
 	">":  GreaterThan,
@@ -1145,34 +993,17 @@ var operatorMap = map[string]TokenType{
 	">=": GreaterThanEqual,
 	"==": Equal,
 	"!=": NotEqual,
-	// Bitwise
-	"&":   BitAnd,
-	"|":   BitOr,
-	"^":   BitExOr,
-	"~":   BitComplement,
-	"<<":  LeftShift,
-	">>":  RightShift,
-	">>>": UnsignedRightShift,
 	// Logical
 	"&&": And,
 	"||": Or,
 	"!":  Not,
 	// Assignment
-	"=":    Assignment,
-	"+=":   AdditionAssignment,
-	"-=":   SubtractionAssignment,
-	"*=":   MultiplicationAssignment,
-	"/=":   DivisionAssignment,
-	"%=":   ModulusAssignment,
-	"<<=":  LeftShiftAssignment,
-	">>=":  RightShiftAssignment,
-	">>>=": UnsignedRightShiftAssignment,
-	"&=":   BitAndAssignment,
-	"|=":   BitOrAssignment,
-	"^=":   BitExOrAssignment,
-	// Ternary
-	"?": QuestionMark,
-	":": Colon,
+	"=":  Assignment,
+	"+=": AdditionAssignment,
+	"-=": SubtractionAssignment,
+	"*=": MultiplicationAssignment,
+	"/=": DivisionAssignment,
+	"%=": ModulusAssignment,
 }
 
 // operator match Java operator

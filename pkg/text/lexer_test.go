@@ -58,7 +58,6 @@ func TestTokenString(t *testing.T) {
 		{newToken(1, 0, "int", Keyword), "1:0 <Keyword> `int`"},
 		{newToken(3, 120, "null", NullLiteral), "3:120 <NullLiteral> `null`"},
 		{newToken(1334, 133, "variable", Id), "1334:133 <Id> `variable`"},
-		{newToken(1231, 3, ">>", RightShift), "1231:3 <RightShift> `>>`"},
 	}
 
 	for _, d := range data {
@@ -433,9 +432,6 @@ func TestLexer_numeralLiteral(t *testing.T) {
 		// decimal integers
 		{"0", IntegerLiteral},
 		{"123", IntegerLiteral},
-		// long suffix
-		{"123l", IntegerLiteral},
-		{"123L", IntegerLiteral},
 		//underscores is accepted
 		{"123_456", IntegerLiteral},
 		{"123___456", IntegerLiteral},
@@ -444,8 +440,6 @@ func TestLexer_numeralLiteral(t *testing.T) {
 		{"0x0", IntegerLiteral},
 		{"0x123", IntegerLiteral},
 		{"0x123FF", IntegerLiteral},
-		{"0x123FFl", IntegerLiteral},
-		{"0x123FFL", IntegerLiteral},
 		{"0xAFFF", IntegerLiteral},
 		{"0xffff", IntegerLiteral},
 		{"0x00_ff", IntegerLiteral},
@@ -454,73 +448,12 @@ func TestLexer_numeralLiteral(t *testing.T) {
 		//OCTAL int
 		{"00", IntegerLiteral},
 		{"0123", IntegerLiteral},
-		{"0123l", IntegerLiteral},
-		{"0123L", IntegerLiteral},
-		{"0123_456l", IntegerLiteral},
-		{"0123_456_7l", IntegerLiteral},
-		{"0123_456_7l", IntegerLiteral},
-		{"0123_456__7l", IntegerLiteral},
 		//BINARY int
 		{"0b0", IntegerLiteral},
 		{"0b101", IntegerLiteral},
 		{"0b1001", IntegerLiteral},
-		{"0b1001l", IntegerLiteral},
-		{"0b1001L", IntegerLiteral},
 		{"0b111_0000_1111", IntegerLiteral},
 		{"0b111__0000__1111", IntegerLiteral},
-		{"0b111__0000__1111l", IntegerLiteral},
-
-		//FLOATS
-		// floating point literals
-		{"0f", FloatingPointLiteral},
-		{"3f", FloatingPointLiteral},
-		{"3F", FloatingPointLiteral},
-		{"0.2f", FloatingPointLiteral},
-		{".2f", FloatingPointLiteral},
-		{".2f", FloatingPointLiteral},
-		// exponents
-		{"3e3f", FloatingPointLiteral},
-		{"3E3f", FloatingPointLiteral},
-		{"3E-3f", FloatingPointLiteral}, //  signed exponent
-		{"3e+3f", FloatingPointLiteral},
-		{"3e+3", FloatingPointLiteral},
-		{"3.32e+3", FloatingPointLiteral},
-		{"0.123456e7", FloatingPointLiteral},
-		{"0.123456e7f", FloatingPointLiteral},
-		{".23e4", FloatingPointLiteral},
-		//underscored
-		{"12_34.56_7e4", FloatingPointLiteral},
-		{"12__34.56__8_7e4f", FloatingPointLiteral},
-		{"0.5_6e7_8f", FloatingPointLiteral},
-		// double suffix
-		{"0d", FloatingPointLiteral},
-		{"3d", FloatingPointLiteral},
-		{".3d", FloatingPointLiteral},
-		{"3.3d", FloatingPointLiteral},
-		{"1.23e-2d", FloatingPointLiteral},
-		{"1.23e+4d", FloatingPointLiteral},
-		{"1.23e+4d", FloatingPointLiteral},
-		{"1.23e+4d", FloatingPointLiteral},
-		{"1.23e-4d", FloatingPointLiteral},
-		{"1.23_456e+4d", FloatingPointLiteral},
-		{".123_4e5_6d", FloatingPointLiteral},
-		{"9.123_4e-5_6d", FloatingPointLiteral},
-		//HEX Float
-		{"0x12p34", FloatingPointLiteral},
-		{"0X12p34", FloatingPointLiteral}, // uppercase X
-		{"0x12p34f", FloatingPointLiteral},
-		{"0x.12p34f", FloatingPointLiteral},
-		{"0x.ABp34f", FloatingPointLiteral},
-		{"0xABP34F", FloatingPointLiteral},
-		{"0xABP+34F", FloatingPointLiteral},
-		{"0xABP-34F", FloatingPointLiteral},
-		{"0xAB.Cp34F", FloatingPointLiteral},
-		{"0xAB.Cp34F", FloatingPointLiteral},
-		{"0xab.12p34F", FloatingPointLiteral},
-		{"0xF00D.ABp34F", FloatingPointLiteral},
-		{"0xF0_0D.12_ABp-34F", FloatingPointLiteral},
-		{"0xF0_0D.12_ABp+34F", FloatingPointLiteral},
-		{"0XF0_0D.12_ABp+34F", FloatingPointLiteral}, // uppercase X
 	}
 	for _, d := range data {
 		withLexer(d.str, func(lx *Lexer) {
@@ -553,12 +486,6 @@ func TestLexer_numeralLiteral_panic(t *testing.T) {
 		"0b_",
 		"0b1_",
 		"0b_1",
-		// incomplete exponent followed by signed integer
-		"12e",
-		"0e",
-		"12e+",
-		"12e-",
-		".3e-",
 	}
 
 	for _, str := range data {
@@ -892,8 +819,6 @@ func TestLexer_operator(t *testing.T) {
 		{"*", Multiplication},
 		{"/", Division},
 		{"%", Modulus},
-		{"++", Increment},
-		{"--", Decrement},
 		// Relation
 		{"<", LessThan},
 		{">", GreaterThan},
@@ -902,13 +827,6 @@ func TestLexer_operator(t *testing.T) {
 		{"==", Equal},
 		{"!=", NotEqual},
 		// Bitwise
-		{"&", BitAnd},
-		{"|", BitOr},
-		{"^", BitExOr},
-		{"~", BitComplement},
-		{"<<", LeftShift},
-		{">>", RightShift},
-		{">>>", UnsignedRightShift},
 		//
 		{"&&", And},
 		{"||", Or},
@@ -920,15 +838,6 @@ func TestLexer_operator(t *testing.T) {
 		{"*=", MultiplicationAssignment},
 		{"/=", DivisionAssignment},
 		{"%=", ModulusAssignment},
-		{"<<=", LeftShiftAssignment},
-		{">>=", RightShiftAssignment},
-		{">>>=", UnsignedRightShiftAssignment},
-		{"&=", BitAndAssignment},
-		{"|=", BitOrAssignment},
-		{"^=", BitExOrAssignment},
-		// Ternary
-		{"?", QuestionMark},
-		{":", Colon},
 	}
 
 	for _, d := range data {
@@ -947,23 +856,6 @@ func TestLexer_operator(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestLexer_separator_redirectToNumeralLiteral(t *testing.T) {
-	str := ".123"
-	withLexer(str, func(lx *Lexer) {
-		tok := lx.separator()
-		if tok.Type != FloatingPointLiteral {
-			t.Errorf("The text %s should return a FloatingPointLiteral instead of %s",
-				str,
-				tok.Type,
-			)
-		}
-
-		if tok.Value() != str {
-			t.Errorf("Should return a %s instead of %#v", str, tok.Value())
-		}
-	})
 }
 
 func TestLexer_escapeUnicode_panic(t *testing.T) {
