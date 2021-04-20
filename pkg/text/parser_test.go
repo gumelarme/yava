@@ -77,7 +77,7 @@ func TestParser_arrayAccess(t *testing.T) {
 func TestParser_arrayAccess_panic(t *testing.T) {
 	data := []string{
 		"arr[]",
-		"arr[0][]",
+		// "arr[0][]",
 	}
 
 	for _, str := range data {
@@ -85,6 +85,81 @@ func TestParser_arrayAccess_panic(t *testing.T) {
 			msg := fmt.Sprintf("Should panic on: `%s`", str)
 			defer assertPanic(t, msg)
 			p.fieldAccess()
+		})
+	}
+}
+
+func fakeToken(str string, tt TokenType) Token {
+	return newToken(1, 0, str, tt)
+}
+func TestParser_additiveExp(t *testing.T) {
+	data := []struct {
+		str string
+		exp Expression
+	}{
+		{
+			"1 + 2",
+			&BinOp{fakeToken("+", Addition), Num(1), Num(2)},
+		},
+
+		{
+			"1 + 2 - 3",
+			&BinOp{fakeToken("+", Addition), Num(1), &BinOp{fakeToken("-", Subtraction), Num(2), Num(3)}},
+		},
+
+		{
+			"1 + 2 * 3",
+			&BinOp{fakeToken("+", Addition), Num(1), &BinOp{fakeToken("*", Multiplication), Num(2), Num(3)}},
+		},
+
+		{
+			"2 * 3",
+			&BinOp{fakeToken("*", Multiplication), Num(2), Num(3)},
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			result := p.additiveExp()
+			if r, e := PrettyPrint(result), PrettyPrint(d.exp); r != e {
+				t.Errorf("Expected %s but got %s", e, r)
+			}
+		})
+	}
+}
+
+func TestParser_multiplicativeExp(t *testing.T) {
+	data := []struct {
+		str string
+		exp Expression
+	}{
+		{
+			"1 / 2",
+			&BinOp{fakeToken("/", Division), Num(1), Num(2)},
+		},
+
+		{
+			"1 * 2 / 3",
+			&BinOp{fakeToken("*", Multiplication), Num(1), &BinOp{fakeToken("/", Modulus), Num(2), Num(3)}},
+		},
+
+		{
+			"height / width",
+			&BinOp{fakeToken("/", Multiplication), &FieldAccess{"height", nil}, &FieldAccess{"width", nil}},
+		},
+
+		{
+			"height / width[0]",
+			&BinOp{fakeToken("/", Multiplication), &FieldAccess{"height", nil}, &FieldAccess{"width", &ArrayAccess{Num(0), nil}}},
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			result := p.multiplicativeExp()
+			if r, e := PrettyPrint(result), PrettyPrint(d.exp); r != e {
+				t.Errorf("Expected %s but got %s", e, r)
+			}
 		})
 	}
 }

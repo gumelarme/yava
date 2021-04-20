@@ -155,6 +155,15 @@ type Token struct {
 	strBuilder strings.Builder // hold the string later retruned via Value()
 }
 
+func (t Token) IsOfType(types ...TokenType) bool {
+	for _, ty := range types {
+		if t.Type == ty {
+			return true
+		}
+	}
+	return false
+}
+
 // an alias for Token used for marshalling
 // used for testing purposes
 type jsonToken struct {
@@ -513,7 +522,7 @@ func (lx *Lexer) returnAndReset() (t Token) {
 
 // NextToken return the next token on each call
 // will return error on io.EOF
-func (lx *Lexer) getNext() (Token, error) {
+func (lx *Lexer) getNext() (tok Token, e error) {
 	for lx.hasNextRune() {
 		p, e := lx.peekChar()
 		lx.startPos = lx.pos
@@ -527,23 +536,27 @@ func (lx *Lexer) getNext() (Token, error) {
 			// necessary for counting line number and tabs
 			lx.whitespace()
 			continue
-		case p == '/':
-			// TODO: should comment returned as token or completely ignored?
-			lx.comment()
-			continue
+		// case p == '/':
+		// 	lx.comment()
 		case IsJavaLetter(p):
-			return lx.identifier(), nil
+			tok = lx.identifier()
 		case IsDigit(p):
-			return lx.numeralLiteral(), nil
+			tok = lx.numeralLiteral()
 		case p == '\'':
-			return lx.charLiteral(), nil
+			tok = lx.charLiteral()
 		case p == '"':
-			return lx.stringLiteral(), nil
+			tok = lx.stringLiteral()
 		case IsSeparator(p):
-			return lx.separator(), nil
+			tok = lx.separator()
 		case IsOperatorStart(p):
-			return lx.operator(), nil
+			tok = lx.operator()
 		}
+
+		if tok.Type == Comment {
+			continue
+		}
+
+		return tok, nil
 	}
 	return Token{}, io.EOF
 }
@@ -566,16 +579,19 @@ func (lx *Lexer) PeekToken() (Token, error) {
 
 // comment recognize the comment pattern in Java,
 // both the single line and multiline are recognized.
-func (lx *Lexer) comment() {
+func (lx *Lexer) comment() Token {
 	lx.consume()
+
 	r, _ := lx.nextChar()
 	lx.token.writeRune(r)
+	lx.token.Type = Comment
+
 	if r == '/' {
 		lx.endOfLineComment()
 	} else if r == '*' {
 		lx.traditionalComment()
 	}
-	lx.returnAndReset()
+	return lx.returnAndReset()
 }
 
 // endOfLineComment recognize the single line Java comment
@@ -1009,6 +1025,15 @@ var operatorMap = map[string]TokenType{
 // operator match Java operator
 func (lx *Lexer) operator() Token {
 	r, _ := lx.nextChar()
+
+	if r == '/' {
+		if p, _ := lx.peekChar(); IsRuneIn(p, "/*") {
+			lx.rawPos.Column -= 1
+			lx.unicodeQueue.Queue(p)
+			return lx.comment()
+		}
+	}
+
 	lx.token.writeRune(r)
 
 	if IsRuneIn(r, "+-=&|<>") {

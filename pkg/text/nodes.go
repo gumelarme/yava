@@ -2,6 +2,7 @@ package text
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -36,6 +37,17 @@ type Expression interface {
 
 type Num int
 
+func NumFromStr(str string) Num {
+	num, e := strconv.Atoi(str)
+
+	if e != nil {
+		msg := fmt.Sprintf("`%s` is not an integer.", str)
+		panic(msg)
+	}
+
+	return Num(num)
+}
+
 func (n Num) NodeContent() (string, string) {
 	return "num", fmt.Sprintf("%d", int(n))
 }
@@ -49,7 +61,7 @@ func (n Num) IsExpression() bool {
 }
 
 type NamedValue interface {
-	INode
+	Expression
 	GetChild() NamedValue
 }
 
@@ -69,7 +81,8 @@ func (f *FieldAccess) NodeContent() (string, string) {
 func (f *FieldAccess) ChildNode() INode {
 	return f.Child
 }
-func (f *FieldAccess) IsExpression() bool {
+
+func (FieldAccess) IsExpression() bool {
 	return true
 }
 
@@ -84,6 +97,10 @@ func (a *ArrayAccess) NodeContent() (string, string) {
 
 func (a *ArrayAccess) GetChild() NamedValue {
 	return a.Child
+}
+
+func (ArrayAccess) IsExpression() bool {
+	return true
 }
 
 func (a *ArrayAccess) ChildNode() INode {
@@ -113,6 +130,44 @@ func (m *MethodCall) ChildNode() INode {
 	return m.Child
 }
 
-func (m *MethodCall) IsExpression() bool {
+func (MethodCall) IsExpression() bool {
 	return true
+}
+
+type BinOp struct {
+	operator Token
+	Left     Expression
+	Right    Expression
+}
+
+// TODO: Decide wether to export BinOp or not
+func NewBinOp(op Token, left, right Expression) BinOp {
+	if op.Type < Addition || op.Type > Modulus {
+		panic("Operator should be either Addition, Subtraction, Multiplication, Division or Modulus")
+	}
+
+	return BinOp{op, left, right}
+}
+
+func (b *BinOp) NodeContent() (string, string) {
+
+	// fmt.Println("Got null", b.Left, b.Right)
+	return "binop",
+		fmt.Sprintf("%s :left %s :right %s",
+			b.operator.Value(),
+			PrettyPrint(b.Left),
+			PrettyPrint(b.Right),
+		)
+}
+
+func (b *BinOp) ChildNode() INode {
+	return nil
+}
+
+func (b *BinOp) IsExpression() bool {
+	return true
+}
+
+func (b *BinOp) GetOperator() Token {
+	return b.operator
 }

@@ -2,7 +2,6 @@ package text
 
 import (
 	"fmt"
-	"strconv"
 )
 
 // Parser represent a parser engine
@@ -46,17 +45,56 @@ func (p *Parser) match(token TokenType) string {
 
 // TODO: implement more
 func (p *Parser) expression() Expression {
-	value := p.match(IntegerLiteral)
-	num, e := strconv.Atoi(value)
-	if e != nil {
-		panic("Should be a number here")
+	return p.additiveExp()
+}
+func (p *Parser) additiveExp() Expression {
+	left := p.multiplicativeExp()
+
+	operators := []TokenType{Addition, Subtraction}
+	for tok := *p.curToken; tok.IsOfType(operators...); tok = *p.curToken {
+		p.match(tok.Type)
+		right := p.additiveExp()
+		left = &BinOp{tok, left, right}
 	}
 
-	return Num(num)
+	return left
+}
+
+func (p *Parser) multiplicativeExp() Expression {
+	left := p.primaryExp()
+
+	operators := []TokenType{Division, Multiplication, Modulus}
+	for tok := *p.curToken; tok.IsOfType(operators...); tok = *p.curToken {
+		p.match(tok.Type)
+		right := p.multiplicativeExp()
+		left = &BinOp{tok, left, right}
+	}
+
+	return left
+}
+
+// primaryExp parse literal, field-access, and method-call
+func (p *Parser) primaryExp() (ex Expression) {
+	switch p.curToken.Type {
+	case IntegerLiteral:
+		value := p.match(IntegerLiteral)
+		ex = NumFromStr(value)
+	case StringLiteral:
+	case BooleanLiteral:
+	case CharLiteral:
+	case Id:
+		ex = p.fieldAccess()
+	case Keyword:
+		// redirect to `this` processing method
+	default:
+		//FIXME: What to do?
+		panic("Unexpected")
+	}
+
+	return
 }
 
 func (p *Parser) fieldAccess() (val NamedValue) {
-
 	peek, _ := p.lexer.PeekToken()
 	if peek.Type == LeftParenthesis {
 		return p.methodCall()
