@@ -199,3 +199,39 @@ func TestParser_validName(t *testing.T) {
 		})
 	}
 }
+
+func TestParser_objectInitialization(t *testing.T) {
+	data := []struct {
+		str string
+		exp Expression
+	}{
+		{
+			"new Hello()",
+			&ObjectCreation{MethodCall{"Hello", []Expression{}, nil}},
+		},
+
+		{
+			"new Nice(1, 2)",
+			&ObjectCreation{MethodCall{"Nice", []Expression{Num(1), Num(2)}, nil}},
+		},
+
+		{
+			"new int[6]",
+			&ArrayCreation{"int", Num(6)},
+		},
+
+		{
+			"new Hello[6 + 12]",
+			&ArrayCreation{"Hello", &BinOp{fakeToken("+", Addition), Num(6), Num(12)}},
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			result := p.objectInitialization()
+			if r, e := PrettyPrint(result), PrettyPrint(d.exp); r != e {
+				t.Errorf("Expected %s but got %s", e, r)
+			}
+		})
+	}
+}

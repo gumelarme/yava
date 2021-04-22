@@ -209,5 +209,28 @@ func (b *BinOp) GetOperator() Token {
 
 //TODO: create proper object creation struct
 type ObjectCreation struct {
-	Type string
+	MethodCall
+}
+
+func (o *ObjectCreation) NodeContent() (string, string) {
+	_, argStr := o.MethodCall.NodeContent()
+	return "object-creation", argStr
+}
+
+type ArrayCreation struct {
+	Type   string
+	Length Expression
+}
+
+func (a *ArrayCreation) NodeContent() (string, string) {
+	return "array-creation",
+		fmt.Sprintf(":length %s", PrettyPrint(a.Length))
+}
+
+func (a *ArrayCreation) ChildNode() INode {
+	return nil
+}
+
+func (a *ArrayCreation) IsExpression() bool {
+	return true
 }

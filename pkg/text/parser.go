@@ -48,6 +48,32 @@ func (p *Parser) expression() Expression {
 	return p.additiveExp()
 }
 
+func (p *Parser) objectInitialization() Expression {
+	arr := func(name string) *ArrayCreation {
+		p.match(LeftSquareBracket)
+		exp := p.expression()
+		p.match(RightSquareBracket)
+		return &ArrayCreation{name, exp}
+	}
+
+	p.match(Keyword) //new
+	if ty := p.curToken.Type; ty == Keyword {
+		typename := p.primitiveType()
+		return arr(typename)
+	} else {
+		// Here its should be an ID
+		peek, _ := p.lexer.PeekToken()
+		if peek.Type == LeftParenthesis {
+			method := p.methodCall()
+			obj := ObjectCreation{*method}
+			return &obj
+		} else {
+			typename := p.match(Id)
+			return arr(typename)
+		}
+	}
+}
+
 func (p *Parser) primitiveType() string {
 	isOneOf := func(tok Token) bool {
 		if tok.Type != Keyword {
@@ -154,7 +180,7 @@ func (p *Parser) fieldAccess() (val NamedValue) {
 	return
 }
 
-func (p *Parser) methodCall() NamedValue {
+func (p *Parser) methodCall() *MethodCall {
 
 	name := p.match(Id)
 	p.match(LeftParenthesis)
@@ -181,7 +207,7 @@ func (p *Parser) methodCall() NamedValue {
 	return method
 }
 
-func (p *Parser) arrayAccess() (val NamedValue) {
+func (p *Parser) arrayAccess() *ArrayAccess {
 	p.match(LeftSquareBracket)
 	exp := p.expression()
 	p.match(RightSquareBracket)
