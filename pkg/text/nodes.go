@@ -35,6 +35,21 @@ type Expression interface {
 	IsExpression() bool
 }
 
+// FIXME: Change to something better
+type Null struct{}
+
+func (Null) NodeContent() (string, string) {
+	return "null", ""
+}
+
+func (Null) ChildNode() INode {
+	return nil
+}
+
+func (Null) IsExpression() bool {
+	return true
+}
+
 type Num int
 
 func NumFromStr(str string) Num {
@@ -63,6 +78,26 @@ func (n Num) IsExpression() bool {
 type NamedValue interface {
 	Expression
 	GetChild() NamedValue
+}
+
+type This struct {
+	Child NamedValue
+}
+
+func (t *This) NodeContent() (string, string) {
+	return "this", ""
+}
+
+func (t *This) ChildNode() INode {
+	return t.Child
+}
+
+func (t *This) GetChild() NamedValue {
+	return t.Child
+}
+
+func (t *This) IsExpression() bool {
+	return true
 }
 
 type FieldAccess struct {
@@ -170,4 +205,9 @@ func (b *BinOp) IsExpression() bool {
 
 func (b *BinOp) GetOperator() Token {
 	return b.operator
+}
+
+//TODO: create proper object creation struct
+type ObjectCreation struct {
+	Type string
 }

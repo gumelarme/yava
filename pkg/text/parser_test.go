@@ -152,11 +152,47 @@ func TestParser_multiplicativeExp(t *testing.T) {
 			"height / width[0]",
 			&BinOp{fakeToken("/", Multiplication), &FieldAccess{"height", nil}, &FieldAccess{"width", &ArrayAccess{Num(0), nil}}},
 		},
+
+		{
+			"this.height / width",
+			&BinOp{fakeToken("/", Multiplication), &This{&FieldAccess{"height", nil}}, &FieldAccess{"width", nil}},
+		},
 	}
 
 	for _, d := range data {
 		withParser(d.str, func(p *Parser) {
 			result := p.multiplicativeExp()
+			if r, e := PrettyPrint(result), PrettyPrint(d.exp); r != e {
+				t.Errorf("Expected %s but got %s", e, r)
+			}
+		})
+	}
+}
+
+func TestParser_validName(t *testing.T) {
+	data := []struct {
+		str string
+		exp NamedValue
+	}{
+		{
+			"this.person",
+			&This{&FieldAccess{"person", nil}},
+		},
+
+		{
+			"this.person()",
+			&This{&MethodCall{"person", []Expression{}, nil}},
+		},
+
+		{
+			"person",
+			&FieldAccess{"person", nil},
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			result := p.validName()
 			if r, e := PrettyPrint(result), PrettyPrint(d.exp); r != e {
 				t.Errorf("Expected %s but got %s", e, r)
 			}

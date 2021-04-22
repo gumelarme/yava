@@ -47,6 +47,33 @@ func (p *Parser) match(token TokenType) string {
 func (p *Parser) expression() Expression {
 	return p.additiveExp()
 }
+
+func (p *Parser) primitiveType() string {
+	isOneOf := func(tok Token) bool {
+		if tok.Type != Keyword {
+			return false
+		}
+
+		ty := []string{"int", "char", "boolean"}
+		for _, name := range ty {
+			if tok.Value() == name {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	if !isOneOf(*p.curToken) {
+		msg := fmt.Sprintf("Expecting a type instead of %s", p.curToken)
+		panic(msg)
+	}
+
+	val := p.curToken.Value()
+	p.match(p.curToken.Type)
+	return val
+}
+
 func (p *Parser) additiveExp() Expression {
 	left := p.multiplicativeExp()
 
@@ -82,10 +109,13 @@ func (p *Parser) primaryExp() (ex Expression) {
 	case StringLiteral:
 	case BooleanLiteral:
 	case CharLiteral:
+	case NullLiteral:
+		p.match(NullLiteral)
+		ex = Null{}
 	case Id:
-		ex = p.fieldAccess()
+		fallthrough
 	case Keyword:
-		// redirect to `this` processing method
+		ex = p.validName()
 	default:
 		//FIXME: What to do?
 		panic("Unexpected")
@@ -94,10 +124,21 @@ func (p *Parser) primaryExp() (ex Expression) {
 	return
 }
 
+func (p *Parser) validName() (val NamedValue) {
+	if KeywordEqualTo(*p.curToken, "this") {
+		p.match(Keyword)
+		p.match(Dot)
+		val = &This{p.fieldAccess()}
+	} else {
+		val = p.fieldAccess()
+	}
+	return
+}
+
 func (p *Parser) fieldAccess() (val NamedValue) {
 	peek, _ := p.lexer.PeekToken()
 	if peek.Type == LeftParenthesis {
-		return p.methodCall()
+		val = p.methodCall()
 	} else {
 		name := p.match(Id)
 		field := &FieldAccess{name, nil}
@@ -108,8 +149,9 @@ func (p *Parser) fieldAccess() (val NamedValue) {
 		} else if t == LeftSquareBracket {
 			field.Child = p.arrayAccess()
 		}
-		return field
+		val = field
 	}
+	return
 }
 
 func (p *Parser) methodCall() NamedValue {
