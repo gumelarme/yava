@@ -48,6 +48,49 @@ func (p *Parser) expression() Expression {
 	return p.additiveExp()
 }
 
+func (p *Parser) conditionalOrExp() Expression {
+	left := p.conditionalAndExp()
+	for p.curToken.Type == Or {
+		orToken := *p.curToken
+		p.match(Or)
+		right := p.conditionalAndExp()
+		left = &BinOp{orToken, left, right}
+	}
+	return left
+}
+
+func (p *Parser) conditionalAndExp() Expression {
+	left := p.relationalExp()
+	for p.curToken.Type == And {
+		orToken := *p.curToken
+		p.match(And)
+		right := p.conditionalAndExp()
+		left = &BinOp{orToken, left, right}
+	}
+	return left
+}
+
+func (p *Parser) relationalExp() (exp Expression) {
+	exp = p.additiveExp()
+
+	operators := []TokenType{
+		Equal,
+		NotEqual,
+		GreaterThan,
+		LessThan,
+		GreaterThanEqual,
+		LessThanEqual,
+	}
+
+	if p.curToken.IsOfType(operators...) {
+		tok := *p.curToken
+		p.match(p.curToken.Type)
+		right := p.additiveExp()
+		exp = &BinOp{tok, exp, right}
+	}
+	return
+}
+
 func (p *Parser) objectInitialization() Expression {
 	arr := func(name string) *ArrayCreation {
 		p.match(LeftSquareBracket)

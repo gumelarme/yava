@@ -12,6 +12,111 @@ func withParser(s string, parserAction func(p *Parser)) {
 	})
 }
 
+func TestParser_conditionalOrExp(t *testing.T) {
+	data := []struct {
+		str    string
+		expect Expression
+	}{
+		{"true", Boolean(true)},
+		{"true || false", &BinOp{fakeToken("||", Or), Boolean(true), Boolean(false)}},
+		{
+			"true || false && true",
+			&BinOp{fakeToken("||", Or),
+				Boolean(true),
+				&BinOp{fakeToken("&&", And), Boolean(false), Boolean(true)},
+			},
+		},
+		{
+			"true && false || true",
+			&BinOp{fakeToken("||", Or),
+				&BinOp{fakeToken("&&", And), Boolean(true), Boolean(false)},
+				Boolean(true),
+			},
+		},
+		{
+			"true && false && true || false",
+			&BinOp{fakeToken("||", Or),
+				&BinOp{fakeToken("&&", And),
+					Boolean(true),
+					&BinOp{fakeToken("&&", And),
+						Boolean(false),
+						Boolean(true),
+					},
+				},
+				Boolean(false),
+			},
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			result := p.conditionalOrExp()
+			resStr, expStr := PrettyPrint(result), PrettyPrint(d.expect)
+
+			if resStr != expStr {
+				t.Errorf("Expect \n%s but got \n%s", expStr, resStr)
+			}
+		})
+	}
+}
+
+func TestParser_conditionalAndExp(t *testing.T) {
+	data := []struct {
+		str    string
+		expect Expression
+	}{
+		{"true", Boolean(true)},
+		{"true && false", &BinOp{fakeToken("&&", And), Boolean(true), Boolean(false)}},
+		{
+			"a > b && method()",
+			&BinOp{fakeToken("&&", And),
+				&BinOp{fakeToken(">", GreaterThan), &FieldAccess{"a", nil}, &FieldAccess{"b", nil}},
+				&MethodCall{"method", []Expression{}, nil}},
+		},
+		//chained
+		{
+			"true && false && method()",
+			&BinOp{fakeToken("&&", And),
+				Boolean(true),
+				&BinOp{fakeToken("&&", And),
+					Boolean(false),
+					&MethodCall{"method", []Expression{}, nil}},
+			}},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			result := p.conditionalAndExp()
+			resStr, expStr := PrettyPrint(result), PrettyPrint(d.expect)
+			if resStr != expStr {
+				t.Errorf("Expect \n\t%s but got \n\t%s", expStr, resStr)
+			}
+		})
+	}
+}
+
+func TestParser_relationalExp(t *testing.T) {
+	data := []struct {
+		str    string
+		expect Expression
+	}{
+		{"12", Num(12)},
+		{"12 == 12", &BinOp{fakeToken("==", Equal), Num(12), Num(12)}},
+		{"1 >= 2", &BinOp{fakeToken(">=", GreaterThanEqual), Num(1), Num(2)}},
+		{`true != this.status`, &BinOp{fakeToken("!=", NotEqual), Boolean(true), &This{&FieldAccess{"status", nil}}}},
+	}
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			result := p.relationalExp()
+			resStr, expStr := PrettyPrint(result), PrettyPrint(d.expect)
+
+			if resStr != expStr {
+				t.Errorf("Expecting %s instead of %s", expStr, resStr)
+			}
+		})
+	}
+}
+
 func TestParser_fieldAccess(t *testing.T) {
 	data := []struct {
 		str    string
