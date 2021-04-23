@@ -43,9 +43,14 @@ func (p *Parser) match(token TokenType) string {
 	return value
 }
 
-// TODO: implement more
+// FIXME: shoudl objectInitialization be in primaryExpression so
+// it could use surrounding parens, but the array cant tho
 func (p *Parser) expression() Expression {
-	return p.additiveExp()
+	if KeywordEqualTo(*p.curToken, "new") {
+		return p.objectInitialization()
+	} else {
+		return p.conditionalOrExp()
+	}
 }
 
 func (p *Parser) conditionalOrExp() Expression {
@@ -191,6 +196,10 @@ func (p *Parser) primaryExp() (ex Expression) {
 		fallthrough
 	case Keyword:
 		ex = p.validName()
+	case LeftParenthesis:
+		p.match(LeftParenthesis)
+		ex = p.conditionalOrExp()
+		p.match(RightParenthesis)
 	default:
 		//FIXME: What to do?
 		panic("Unexpected")

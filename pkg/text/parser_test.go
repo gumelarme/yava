@@ -12,6 +12,52 @@ func withParser(s string, parserAction func(p *Parser)) {
 	})
 }
 
+func TestParser_expression(t *testing.T) {
+	data := []struct {
+		str    string
+		expect Expression
+	}{
+		{"2", Num(2)},
+		{"(2)", Num(2)},
+		{"(2 + 3)", &BinOp{fakeToken("+", Addition), Num(2), Num(3)}},
+		{"(2 + 3) * 4",
+			&BinOp{fakeToken("*", Multiplication),
+				&BinOp{fakeToken("+", Addition), Num(2), Num(3)},
+				Num(4),
+			},
+		},
+		{"2 + 3 * 4",
+			&BinOp{fakeToken("+", Addition), Num(2),
+				&BinOp{fakeToken("*", Multiplication), Num(3), Num(4)},
+			},
+		},
+		{"(2 > 3) && method()",
+			&BinOp{fakeToken("&&", And),
+				&BinOp{fakeToken(">", GreaterThan), Num(2), Num(3)},
+				&MethodCall{"method", []Expression{}, nil},
+			},
+		},
+		{
+			"new Foo()",
+			&ObjectCreation{MethodCall{"Foo", []Expression{}, nil}},
+		},
+		{
+			"new Foo[getNumber()]",
+			&ArrayCreation{"Foo", &MethodCall{"getNumber", []Expression{}, nil}},
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			result := p.expression()
+			resStr, expStr := PrettyPrint(result), PrettyPrint(d.expect)
+			if resStr != expStr {
+				t.Errorf("Expecting \n%s but got\n%s", expStr, resStr)
+			}
+		})
+	}
+}
+
 func TestParser_conditionalOrExp(t *testing.T) {
 	data := []struct {
 		str    string
