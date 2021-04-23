@@ -30,15 +30,46 @@ const (
 	Start   TokenType = iota
 	Id                // a-zA-Z 0-9 _ $
 	Keyword           // listed below
-	Operator
-	Separator // ; , . ? : @ (  ) [  ] {  }
 	Comment
 	IntegerLiteral
-	FloatingPointLiteral
 	StringLiteral
-	CharLiteral    // 'c'
+	CharLiteral
 	BooleanLiteral // true false
 	NullLiteral    // null
+	// Separator
+	Semicolon          // ;
+	Dot                // .
+	Comma              // ,
+	LeftParenthesis    // (
+	RightParenthesis   // )
+	LeftSquareBracket  // [
+	RightSquareBracket // ]
+	LeftCurlyBracket   // {
+	RightCurlyBracket  // }
+	//Math Operator
+	Addition       // +
+	Subtraction    // -
+	Multiplication // *
+	Division       // /
+	Modulus        // %
+	// Relation
+	LessThan         // <
+	GreaterThan      // >
+	LessThanEqual    // <=
+	GreaterThanEqual // >=
+	Equal            // ==
+	NotEqual         // !=
+	// Logical
+	And // &&
+	Or  // ||
+	Not // !
+	// Assignment
+	Assignment               // ==
+	AdditionAssignment       // +=
+	SubtractionAssignment    // -=
+	MultiplicationAssignment // *=
+	DivisionAssignment       // /=
+	ModulusAssignment        // %=
 )
 
 // return the string representation of the TokenType
@@ -47,15 +78,46 @@ func (t TokenType) String() string {
 		"Start",
 		"Id",
 		"Keyword",
-		"Operator",
-		"Separator",
 		"Comment",
 		"IntegerLiteral",
-		"FloatingPointLiteral",
 		"StringLiteral",
 		"CharLiteral",
 		"BooleanLiteral",
 		"NullLiteral",
+		// "Separator",
+		"Semicolon",
+		"Dot",
+		"Comma",
+		"LeftParenthesis",
+		"RightParenthesis",
+		"LeftSquareBracket",
+		"RightSquareBracket",
+		"LeftCurlyBracket",
+		"RightCurlyBracket",
+		//Math Operator
+		"Add",
+		"Subtract",
+		"Multiply",
+		"Divide",
+		"Modulus",
+		// Relation
+		"LessThan",
+		"GreaterThan",
+		"LessThanEqual",
+		"GreaterThanEqual",
+		"Equal",
+		"NotEqual",
+		// Logical
+		"And",
+		"Or",
+		"Not",
+		// Assignment
+		"Assignment",
+		"AdditionAssignment",
+		"SubtractionAssignment",
+		"MultiplicationAssignment",
+		"DivisionAssignment",
+		"ModAssignment",
 	}[t]
 }
 
@@ -72,16 +134,6 @@ const (
 	Hex
 	Octal
 	Binary
-	// Subtype for operator
-	ArithmeticOperator // + - * / %
-	RelationOperator   // < > <= >= == !=
-	BitwiseOperator    // & | ^ ~ << >> >>>
-	LogicalOperator    // && || !
-	AssignmentOperator // += -= *= /= %=  <<= >>= >>>= &= |= ^=
-	LambdaOperator     // ->
-	TernaryOperator    // ?:
-	Incrementoperator
-	DecrementOperator
 )
 
 // String representation of Subtype
@@ -92,15 +144,6 @@ func (s SubType) String() string {
 		"Hex",
 		"Octal",
 		"Binary",
-		"ArithmeticOperator",
-		"RelationOperator",
-		"BitwiseOperator",
-		"LogicalOperator",
-		"AssignmentOperator",
-		"LambdaOperator",
-		"TernaryOperator",
-		"Incrementoperator",
-		"DecrementOperator",
 	}[s]
 }
 
@@ -112,12 +155,21 @@ type Token struct {
 	strBuilder strings.Builder // hold the string later retruned via Value()
 }
 
+func (t Token) IsOfType(types ...TokenType) bool {
+	for _, ty := range types {
+		if t.Type == ty {
+			return true
+		}
+	}
+	return false
+}
+
 // an alias for Token used for marshalling
 // used for testing purposes
 type jsonToken struct {
 	Position `json:"position"`
 	Type     TokenType `json:"type"`
-	Sub      SubType   `json:"subtype"`
+	Sub      SubType   `json:"subtype,omitempty"`
 	Value    string    `json:"value"`
 }
 
@@ -281,6 +333,8 @@ type Lexer struct {
 	token        Token
 	unicodeQueue queue // hold the value of decoded unicode string
 	startPos     Position
+	tokenBuffer  *Token
+	errorBuffer  error
 }
 
 // NewLexer create a new object of lexer
@@ -468,7 +522,7 @@ func (lx *Lexer) returnAndReset() (t Token) {
 
 // NextToken return the next token on each call
 // will return error on io.EOF
-func (lx *Lexer) NextToken() (Token, error) {
+func (lx *Lexer) getNext() (tok Token, e error) {
 	for lx.hasNextRune() {
 		p, e := lx.peekChar()
 		lx.startPos = lx.pos
@@ -482,39 +536,62 @@ func (lx *Lexer) NextToken() (Token, error) {
 			// necessary for counting line number and tabs
 			lx.whitespace()
 			continue
-		case p == '/':
-			// TODO: should comment returned as token or completely ignored?
-			lx.comment()
-			continue
+		// case p == '/':
+		// 	lx.comment()
 		case IsJavaLetter(p):
-			return lx.identifier(), nil
+			tok = lx.identifier()
 		case IsDigit(p):
-			return lx.numeralLiteral(), nil
+			tok = lx.numeralLiteral()
 		case p == '\'':
-			return lx.charLiteral(), nil
+			tok = lx.charLiteral()
 		case p == '"':
-			return lx.stringLiteral(), nil
+			tok = lx.stringLiteral()
 		case IsSeparator(p):
-			return lx.separator(), nil
+			tok = lx.separator()
 		case IsOperatorStart(p):
-			return lx.operator(), nil
+			tok = lx.operator()
 		}
+
+		if tok.Type == Comment {
+			continue
+		}
+
+		return tok, nil
 	}
 	return Token{}, io.EOF
 }
 
+func (lx *Lexer) NextToken() (Token, error) {
+	if lx.tokenBuffer != nil {
+		tok, err := *lx.tokenBuffer, lx.errorBuffer
+		lx.tokenBuffer = nil
+		lx.errorBuffer = nil
+		return tok, err
+	}
+	return lx.getNext()
+}
+
+func (lx *Lexer) PeekToken() (Token, error) {
+	tok, err := lx.NextToken()
+	lx.tokenBuffer, lx.errorBuffer = &tok, err
+	return tok, err
+}
+
 // comment recognize the comment pattern in Java,
 // both the single line and multiline are recognized.
-func (lx *Lexer) comment() {
+func (lx *Lexer) comment() Token {
 	lx.consume()
+
 	r, _ := lx.nextChar()
 	lx.token.writeRune(r)
+	lx.token.Type = Comment
+
 	if r == '/' {
 		lx.endOfLineComment()
 	} else if r == '*' {
 		lx.traditionalComment()
 	}
-	lx.returnAndReset()
+	return lx.returnAndReset()
 }
 
 // endOfLineComment recognize the single line Java comment
@@ -665,105 +742,7 @@ func (lx *Lexer) numeralLiteral() Token {
 		}
 	}
 
-	// check if float
-	p, _ := lx.peekChar()
-	switch {
-	case p == '.' && (lx.token.Sub == Hex || lx.token.Sub == Decimal):
-		lx.consume()
-		lx.floatFractional()
-
-	case lx.token.Sub == Decimal && IsRuneIn(p, "Ee"):
-		lx.exponentPart()
-
-	case lx.token.Sub == Hex && IsRuneIn(p, "Pp"):
-		lx.binaryExponentPart()
-	}
-
-	lx.numeralSuffix()
-
 	return lx.returnAndReset()
-}
-
-// numeralSuffix try to match float or long suffixes.
-// if TokenType is integer it  match both
-// float and long suffixes, and if its already float
-// it only match the float suffix.
-func (lx *Lexer) numeralSuffix() {
-	floatSuffix := "fFdD"
-	longSuffix := "lL"
-
-	match := func(s string) bool {
-		return lx.matchExact(func(r rune) bool {
-			return IsRuneIn(r, s)
-		}, 1, true)
-	}
-
-	if lx.token.Type == FloatingPointLiteral {
-		match(floatSuffix)
-	} else if lx.token.Type == IntegerLiteral {
-		if match(floatSuffix) {
-			lx.token.Type = FloatingPointLiteral
-		} else {
-			match(longSuffix)
-		}
-	}
-}
-
-// floatFractional match the fractional part of a numeralLiteral
-func (lx *Lexer) floatFractional() {
-	if lx.token.Sub == Decimal {
-		lx.floatDecimalFractional()
-	} else if lx.token.Sub == Hex {
-		lx.floatHexFractional()
-	} else {
-		panic("Only Decimal and Hexadecimal are allowed for float.")
-	}
-	lx.token.Type = FloatingPointLiteral
-}
-
-// floatDecimalFractional match the fraction part of a decimal number
-func (lx *Lexer) floatDecimalFractional() {
-	lx.separatedByUnderscore(IsDigit, false)
-	lx.exponentPart()
-}
-
-// floatHexFractional match the fraction part of a hexadecimal number
-func (lx *Lexer) floatHexFractional() {
-	lx.separatedByUnderscore(IsHexDigit, false)
-	lx.binaryExponentPart()
-}
-
-// exponentPart match the decimal exponent pattern
-func (lx *Lexer) exponentPart() {
-	lx.token.Type = FloatingPointLiteral
-	exponentIndicator := lx.matchExact(func(r rune) bool {
-		return IsRuneIn(r, "Ee")
-	}, 1, true)
-
-	if exponentIndicator {
-		lx.signedInteger()
-	}
-}
-
-// exponentPart match the binary exponent pattern for the hexadecimal form of float
-func (lx *Lexer) binaryExponentPart() {
-	lx.token.Type = FloatingPointLiteral
-	exponentIndicator := lx.matchExact(func(r rune) bool {
-		return IsRuneIn(r, "Pp")
-	}, 1, true)
-
-	if exponentIndicator {
-		lx.signedInteger()
-	}
-}
-
-// signedInteger match a signed integer pattern
-func (lx *Lexer) signedInteger() {
-	lx.matchExact(func(r rune) bool {
-		return r == '+' || r == '-'
-	}, 1, true)
-
-	lx.separatedByUnderscore(IsDigit, true)
 }
 
 // separatedByUnderscore will match the provided matcher with
@@ -881,7 +860,6 @@ func (lx *Lexer) stringLiteral() (t Token) {
 // charLiteral recognize literal char value
 // TODO: should escaped sequence return the real values
 // or keep the literal and process it in the parser
-
 func (lx *Lexer) charLiteral() Token {
 	lx.nextChar() // throw out the opening quote
 
@@ -997,69 +975,68 @@ func (lx *Lexer) lineTerminator(r rune) {
 	}
 }
 
+var separatorMap = map[rune]TokenType{
+	';': Semicolon,
+	'.': Dot,
+	',': Comma,
+	'(': LeftParenthesis,
+	')': RightParenthesis,
+	'[': LeftSquareBracket,
+	']': RightSquareBracket,
+	'{': LeftCurlyBracket,
+	'}': RightCurlyBracket,
+}
+
 // separator match Java separator
 // can redirect to numeralLiteral if a dot followed by a digit
 func (lx *Lexer) separator() Token {
 	r, _ := lx.nextChar()
-	if !IsSeparator(r) {
-		if r == ':' {
-			if p, _ := lx.peekChar(); p == ':' {
-				lx.nextChar()
-				lx.token.writeString("::")
-				lx.token.Type = Separator
-			}
-		}
-		return lx.returnAndReset()
-	}
-
 	lx.token.writeRune(r)
-	if r == '.' {
-
-		// catching a float
-		p, _ := lx.peekChar()
-		if IsDigit(p) {
-			lx.token.clear()
-			lx.rawPos.Column -= 1
-			lx.unicodeQueue.Queue(r)
-			return lx.numeralLiteral()
-		}
-
-		isMatch := lx.matchExact(func(r rune) bool {
-			return r == '.'
-		}, 2, true)
-
-		if !isMatch && len(lx.token.Value()) == 2 {
-			lx.token.clear()
-			lx.token.writeRune(r)
-			lx.unicodeQueue.Queue(r)
-		}
-	}
-
-	lx.token.Type = Separator
+	lx.token.Type = separatorMap[r]
 	return lx.returnAndReset()
 }
 
+var operatorMap = map[string]TokenType{
+	"+": Addition,
+	"-": Subtraction,
+	"*": Multiplication,
+	"/": Division,
+	"%": Modulus,
+	// Relation
+	"<":  LessThan,
+	">":  GreaterThan,
+	"<=": LessThanEqual,
+	">=": GreaterThanEqual,
+	"==": Equal,
+	"!=": NotEqual,
+	// Logical
+	"&&": And,
+	"||": Or,
+	"!":  Not,
+	// Assignment
+	"=":  Assignment,
+	"+=": AdditionAssignment,
+	"-=": SubtractionAssignment,
+	"*=": MultiplicationAssignment,
+	"/=": DivisionAssignment,
+	"%=": ModulusAssignment,
+}
+
 // operator match Java operator
-// will redirect to separator on double colon '::'
 func (lx *Lexer) operator() Token {
 	r, _ := lx.nextChar()
+
+	if r == '/' {
+		if p, _ := lx.peekChar(); IsRuneIn(p, "/*") {
+			lx.rawPos.Column -= 1
+			lx.unicodeQueue.Queue(p)
+			return lx.comment()
+		}
+	}
+
 	lx.token.writeRune(r)
 
-	if r == ':' {
-		p, e := lx.peekChar()
-		if e == nil && p == ':' {
-			lx.unicodeQueue.Queue(r)
-			lx.token.reset()
-			return lx.separator()
-		}
-	} else if IsRuneIn(r, "+-=&|<>") {
-		// special case for lambda ->
-		if p, _ := lx.peekChar(); r == '-' && p == '>' {
-			lx.nextChar()
-			lx.token.writeRune(p)
-			goto evaluate
-		}
-
+	if IsRuneIn(r, "+-=&|<>") {
 		// double
 		if p, _ := lx.peekChar(); p == r {
 			lx.nextChar()
@@ -1073,16 +1050,14 @@ func (lx *Lexer) operator() Token {
 		}
 	}
 
-	lx.assignmentOperator()
-
-evaluate:
-	lx.token.Sub = getOperatorType(lx.token.Value())
-	lx.token.Type = Operator
+	lx.endWithEqual()
+	lx.token.Type = operatorMap[lx.token.Value()]
 	return lx.returnAndReset()
 }
 
-// assignmentOperator will try matching assignment operator
-func (lx *Lexer) assignmentOperator() {
+// endWithEqual will try to match possible operator that
+// end with equal sign `=`
+func (lx *Lexer) endWithEqual() {
 	p, _ := lx.peekChar()
 	if p != '=' {
 		return
@@ -1090,10 +1065,9 @@ func (lx *Lexer) assignmentOperator() {
 
 	validOp := []string{
 		"+", "-", "*", "/", "%",
-		"!", "~", "^", "&", "|",
+		"!", "^", "&", "|",
 		">", "<",
-		">>", ">>",
-		">>>",
+		"<<", ">>", ">>>",
 	}
 
 	tok := lx.token.Value()
@@ -1104,32 +1078,4 @@ func (lx *Lexer) assignmentOperator() {
 			break
 		}
 	}
-}
-
-// getOperatorType return SubType of string operator provided
-func getOperatorType(s string) SubType {
-	opType := []struct {
-		collections string
-		sub         SubType
-	}{
-		{"+ - * / %", ArithmeticOperator},                              // 5
-		{"> < >= <= != ==", RelationOperator},                          // 6
-		{"& | ~ ^ >> << >>>", BitwiseOperator},                         // 7
-		{"! && ||", LogicalOperator},                                   // 3
-		{"= += -= *= /= %= &= |= ^= >>= >>= >>>=", AssignmentOperator}, //12
-		{"? :", TernaryOperator},                                       // 2
-		{"->", LambdaOperator},                                         // 1
-		{"++", Incrementoperator},                                      // 1
-		{"--", DecrementOperator},                                      // 1
-	}
-
-	for _, coll := range opType {
-		for _, op := range strings.Split(coll.collections, " ") {
-			if s == op {
-				return coll.sub
-			}
-		}
-	}
-	msg := fmt.Sprintf("Unrecognized operator of %v", s)
-	panic(msg)
 }
