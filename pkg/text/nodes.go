@@ -75,6 +75,72 @@ func (n Num) IsExpression() bool {
 	return true
 }
 
+type Boolean bool
+
+func NewBoolean(s string) Boolean {
+	switch s {
+	case "true":
+		return Boolean(true)
+	case "false":
+		return Boolean(false)
+	default:
+		msg := fmt.Sprintf("Unexpected `%s`, string argument should be either 'true' or 'false'.", s)
+		panic(msg)
+	}
+
+}
+
+func (b Boolean) NodeContent() (string, string) {
+	return "boolean", fmt.Sprintf("%v", b)
+}
+
+func (Boolean) ChildNode() INode {
+	return nil
+}
+
+func (Boolean) IsExpression() bool {
+	return true
+}
+
+type Char rune
+
+func NewChar(s string) Char {
+	chars := []rune(s)
+	if len(chars) != 1 {
+		msg := fmt.Sprintf("string arguments need to be exactly one character, but got %d chars of %s",
+			len(chars),
+			s,
+		)
+		panic(msg)
+	}
+	return Char(chars[0])
+}
+
+func (c Char) NodeContent() (string, string) {
+	return "char", fmt.Sprintf("'%c'", c)
+}
+
+func (Char) ChildNode() INode {
+	return nil
+}
+
+func (Char) IsExpression() bool {
+	return true
+}
+
+type String string
+
+func (s String) NodeContent() (string, string) {
+	return "string", fmt.Sprintf("%#v", s)
+}
+func (String) ChildNode() INode {
+	return nil
+}
+
+func (String) IsExpression() bool {
+	return true
+}
+
 type NamedValue interface {
 	Expression
 	GetChild() NamedValue

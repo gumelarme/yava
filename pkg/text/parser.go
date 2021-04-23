@@ -133,8 +133,14 @@ func (p *Parser) primaryExp() (ex Expression) {
 		value := p.match(IntegerLiteral)
 		ex = NumFromStr(value)
 	case StringLiteral:
+		value := p.match(StringLiteral)
+		ex = String(value)
 	case BooleanLiteral:
+		value := p.match(BooleanLiteral)
+		ex = NewBoolean(value)
 	case CharLiteral:
+		value := p.match(CharLiteral)
+		ex = NewChar(value)
 	case NullLiteral:
 		p.match(NullLiteral)
 		ex = Null{}

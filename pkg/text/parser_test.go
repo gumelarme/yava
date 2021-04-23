@@ -200,6 +200,37 @@ func TestParser_validName(t *testing.T) {
 	}
 }
 
+func TestParser_primaryExp(t *testing.T) {
+	data := []struct {
+		str string
+		exp Expression
+	}{
+		{"123", Num(123)},
+		{`"Hello"`, String("Hello")},
+		{"true", NewBoolean("true")},
+		{"false", NewBoolean("false")},
+		{"'c'", NewChar("c")},
+		{"'你'", NewChar("你")},
+		{"null", Null{}},
+		{"name", &FieldAccess{"name", nil}},
+		{"this.name", &This{&FieldAccess{"name", nil}}},
+		{"this.name()", &This{&MethodCall{"name", []Expression{}, nil}}},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			exp := p.primaryExp()
+			result, expstr := PrettyPrint(exp), PrettyPrint(d.exp)
+			if result != expstr {
+				t.Errorf("PrimaryExp expecting %s but got %s",
+					expstr,
+					result,
+				)
+			}
+		})
+	}
+}
+
 func TestParser_objectInitialization(t *testing.T) {
 	data := []struct {
 		str string
