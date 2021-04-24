@@ -43,6 +43,67 @@ func (p *Parser) match(token TokenType) string {
 	return value
 }
 
+func (p *Parser) statement() (stmt Statement) {
+	if p.curToken.Type == LeftCurlyBracket {
+		p.match(LeftCurlyBracket)
+		var stmtList StatementList
+		for p.curToken.Type != RightCurlyBracket {
+			x := p.statement()
+			stmtList = append(stmtList, x)
+		}
+		// fmt.Print("Got one: ", stmtList.String())
+		p.match(RightCurlyBracket)
+		return stmtList
+	} else if KeywordEqualTo(*p.curToken, "return") || KeywordEqualTo(*p.curToken, "break") {
+		stmt = p.jumpStmt()
+	} else if KeywordEqualTo(*p.curToken, "switch") {
+		stmt = p.switchStmt()
+	}
+	return stmt
+}
+
+func (p *Parser) switchStmt() *SwitchStatement {
+	p.match(Keyword)
+	p.match(LeftParenthesis)
+	exp := p.expression()
+	p.match(RightParenthesis)
+
+	p.match(LeftCurlyBracket)
+	var cases []*CaseStatement
+	for KeywordEqualTo(*p.curToken, "case") {
+		cases = append(cases, p.caseStmt())
+	}
+
+	var defaults []Statement
+	if KeywordEqualTo(*p.curToken, "default") {
+		p.match(Keyword)
+		p.match(Colon)
+		for p.curToken.Type != RightCurlyBracket {
+			defaults = append(defaults, p.statement())
+		}
+	}
+	p.match(RightCurlyBracket)
+
+	return &SwitchStatement{exp, cases, defaults}
+}
+
+func (p *Parser) caseStmt() *CaseStatement {
+	p.match(Keyword)
+	constant := p.primitiveLiteral()
+	p.match(Colon)
+	var stmtList StatementList
+	val := p.curToken.Value()
+	for val != "case" && val != "default" {
+		stmt := p.statement()
+		if stmt == nil {
+			break
+		}
+		stmtList = append(stmtList, stmt)
+		val = p.curToken.Value()
+	}
+	return &CaseStatement{constant, stmtList}
+}
+
 func (p *Parser) jumpStmt() Statement {
 	key := p.match(Keyword)
 	jumpType, _ := jumpTypeMap[key]
@@ -190,18 +251,11 @@ func (p *Parser) multiplicativeExp() Expression {
 // primaryExp parse literal, field-access, and method-call
 func (p *Parser) primaryExp() (ex Expression) {
 	switch p.curToken.Type {
-	case IntegerLiteral:
-		value := p.match(IntegerLiteral)
-		ex = NumFromStr(value)
+	case IntegerLiteral, BooleanLiteral, CharLiteral:
+		ex = p.primitiveLiteral()
 	case StringLiteral:
 		value := p.match(StringLiteral)
 		ex = String(value)
-	case BooleanLiteral:
-		value := p.match(BooleanLiteral)
-		ex = NewBoolean(value)
-	case CharLiteral:
-		value := p.match(CharLiteral)
-		ex = NewChar(value)
 	case NullLiteral:
 		p.match(NullLiteral)
 		ex = Null{}
@@ -219,6 +273,21 @@ func (p *Parser) primaryExp() (ex Expression) {
 	}
 
 	return
+}
+
+func (p *Parser) primitiveLiteral() (ex PrimitiveLiteral) {
+	switch p.curToken.Type {
+	case IntegerLiteral:
+		value := p.match(IntegerLiteral)
+		ex = NumFromStr(value)
+	case BooleanLiteral:
+		value := p.match(BooleanLiteral)
+		ex = NewBoolean(value)
+	case CharLiteral:
+		value := p.match(CharLiteral)
+		ex = NewChar(value)
+	}
+	return ex
 }
 
 func (p *Parser) validName() (val NamedValue) {

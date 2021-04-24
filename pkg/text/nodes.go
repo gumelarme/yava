@@ -13,9 +13,14 @@ type INode interface {
 }
 
 func PrettyPrint(node INode) string {
-	format := "(#%s %s"
 	name, content := node.NodeContent()
-	args := []interface{}{name, content}
+	args := []interface{}{name}
+
+	format := "(#%s"
+	if len(content) > 0 {
+		format += " %s"
+		args = append(args, content)
+	}
 
 	if child := node.ChildNode(); child != nil {
 		format += " %s"
@@ -28,6 +33,19 @@ func PrettyPrint(node INode) string {
 }
 
 type NamedType string
+
+type PrimitiveType string
+
+const (
+	IntType     PrimitiveType = "int"
+	BooleanType PrimitiveType = "boolean"
+	CharType    PrimitiveType = "char"
+)
+
+type PrimitiveLiteral interface {
+	Expression
+	GetType() PrimitiveType
+}
 
 // TODO: Change to something else
 type Expression interface {
@@ -75,6 +93,10 @@ func (n Num) IsExpression() bool {
 	return true
 }
 
+func (Num) GetType() PrimitiveType {
+	return IntType
+}
+
 type Boolean bool
 
 func NewBoolean(s string) Boolean {
@@ -102,6 +124,10 @@ func (Boolean) IsExpression() bool {
 	return true
 }
 
+func (Boolean) GetType() PrimitiveType {
+	return BooleanType
+}
+
 type Char rune
 
 func NewChar(s string) Char {
@@ -126,6 +152,10 @@ func (Char) ChildNode() INode {
 
 func (Char) IsExpression() bool {
 	return true
+}
+
+func (Char) GetType() PrimitiveType {
+	return BooleanType
 }
 
 type String string
@@ -306,6 +336,34 @@ type Statement interface {
 	IsStatement() bool
 }
 
+type StatementList []Statement
+
+func (s StatementList) NodeContent() (string, string) {
+	return "stmt-block", s.ContentString()
+}
+
+func (s StatementList) ContentString() string {
+	var stmtStr []string
+	for _, stmt := range s {
+		stmtStr = append(stmtStr, PrettyPrint(stmt))
+	}
+
+	return strings.Join(stmtStr[:], ", ")
+}
+
+func (s StatementList) ChildNode() INode {
+	return nil
+}
+
+func (s StatementList) IsStatement() bool {
+	return true
+}
+
+func (s StatementList) String() string {
+	x := s.ContentString()
+	return fmt.Sprintf("[%s]", x)
+}
+
 type JumpType int
 
 const (
@@ -333,14 +391,72 @@ type JumpStatement struct {
 	Exp  Expression
 }
 
-func (r *JumpStatement) NodeContent() (string, string) {
-	return r.Type.String(), ""
+func (j *JumpStatement) NodeContent() (string, string) {
+	return j.Type.String(), ""
 }
 
-func (r *JumpStatement) ChildNode() INode {
-	return r.Exp
+func (j *JumpStatement) ChildNode() INode {
+	return j.Exp
 }
 
-func (r *JumpStatement) IsStatement() bool {
+func (j *JumpStatement) IsStatement() bool {
+	return true
+}
+
+type CaseStatement struct {
+	Value         PrimitiveLiteral
+	StatementList StatementList
+}
+
+func (c *CaseStatement) String() string {
+	stmtStr := "(#case %s :do %s"
+	args := []interface{}{PrettyPrint(c.Value), c.StatementList.String()}
+
+	// for _, s := range c.StatementList {
+	// 	stmtStr += "%s"
+	// 	args = append(args, PrettyPrint(s))
+	// }
+
+	stmtStr += ")"
+	return fmt.Sprintf(stmtStr, args...)
+}
+
+type SwitchStatement struct {
+	ValueToCompare Expression
+	CaseList       []*CaseStatement
+	DefaultCase    []Statement
+}
+
+func (s *SwitchStatement) NodeContent() (string, string) {
+	str := "%s :case ["
+	args := []interface{}{PrettyPrint(s.ValueToCompare)}
+
+	cases := []string{}
+	if s.CaseList != nil {
+		for _, c := range s.CaseList {
+			cases = append(cases, c.String())
+		}
+		str += strings.Join(cases[:], ",")
+	}
+	str += "]"
+
+	if s.DefaultCase != nil {
+		str += " :default ["
+		stmt := []string{}
+		for _, s := range s.DefaultCase {
+			stmt = append(stmt, PrettyPrint(s))
+		}
+		str += strings.Join(stmt[:], ",")
+		str += "]"
+	}
+
+	return "switch", fmt.Sprintf(str, args...)
+}
+
+func (s *SwitchStatement) ChildNode() INode {
+	return nil
+}
+
+func (s *SwitchStatement) IsStatement() bool {
 	return true
 }

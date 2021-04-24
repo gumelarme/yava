@@ -12,6 +12,124 @@ func withParser(s string, parserAction func(p *Parser)) {
 	})
 }
 
+func estParser_switchStmt(t *testing.T) {
+	data := []struct {
+		str    string
+		expect SwitchStatement
+	}{
+		{
+			`switch(age){}`,
+			SwitchStatement{&FieldAccess{"age", nil}, nil, nil},
+		},
+
+		{
+			`switch(age){
+case 12:
+return 20;
+}`,
+			SwitchStatement{&FieldAccess{"age", nil},
+				[]*CaseStatement{
+					{Num(12), []Statement{&JumpStatement{ReturnJump, Num(20)}}},
+				},
+				nil,
+			},
+		},
+
+		{
+			`switch(age){
+default:
+return 20;
+}`,
+			SwitchStatement{&FieldAccess{"age", nil},
+				nil,
+				[]Statement{&JumpStatement{ReturnJump, Num(20)}},
+			},
+		},
+
+		{
+			`switch(age.year()){
+case 1998:
+return 20;
+case 20:
+return 2;
+default:
+break;
+}`,
+			SwitchStatement{&FieldAccess{"age", &MethodCall{"year", []Expression{}, nil}},
+				[]*CaseStatement{
+					{Num(1998), []Statement{&JumpStatement{ReturnJump, Num(20)}}},
+					{Num(20), []Statement{&JumpStatement{ReturnJump, Num(2)}}},
+				},
+				[]Statement{&JumpStatement{BreakJump, nil}},
+			},
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			sw := p.switchStmt()
+			if res, ex := PrettyPrint(sw), PrettyPrint(&d.expect); res != ex {
+				t.Errorf("Expecting \n%s but got \n%s", ex, res)
+			}
+		})
+	}
+}
+
+func TestParser_caseStmt(t *testing.T) {
+	data := []struct {
+		str    string
+		expect CaseStatement
+	}{
+		{
+			`case 1:
+return;
+`,
+			CaseStatement{Num(1), []Statement{
+				&JumpStatement{ReturnJump, nil},
+			}},
+		},
+
+		{
+			`case true:
+		return 8;
+		`,
+			CaseStatement{Boolean(true), []Statement{
+				&JumpStatement{ReturnJump, Num(8)},
+			}},
+		},
+
+		{
+			`case 8: {
+return 900;
+}
+		`,
+			CaseStatement{Num(8), []Statement{
+				StatementList{
+					&JumpStatement{ReturnJump, Num(900)},
+				},
+			}},
+		},
+
+		{
+			`case 'A':
+		return;
+		`,
+			CaseStatement{Char('A'), []Statement{
+				&JumpStatement{ReturnJump, nil},
+			}},
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			result := p.caseStmt()
+			if r, expect := result.String(), d.expect.String(); r != expect {
+				t.Errorf("Expecting \n%s but got\n%s", expect, r)
+			}
+		})
+	}
+}
+
 func TestParser_jumpStmt(t *testing.T) {
 	data := []struct {
 		str    string
@@ -23,8 +141,8 @@ func TestParser_jumpStmt(t *testing.T) {
 		{"return 1;", &JumpStatement{ReturnJump, Num(1)}},
 		{"return new Hello();",
 			&JumpStatement{ReturnJump,
-				&ObjectCreation{MethodCall{"Hello", []Expression{}, nil}}
-			}
+				&ObjectCreation{MethodCall{"Hello", []Expression{}, nil}},
+			},
 		},
 	}
 	for _, d := range data {

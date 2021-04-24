@@ -122,3 +122,57 @@ func TestNewChar_panic(t *testing.T) {
 	defer assertPanic(t, msg)
 	NewChar(data)
 }
+
+func TestCaseStatement_String(t *testing.T) {
+	data := []struct {
+		str  string
+		node CaseStatement
+	}{
+		{
+			"(#case (#num 12) :do [])",
+			CaseStatement{Num(12), []Statement{}},
+		},
+		{
+			"(#case (#num 12) :do [(#return)])",
+			CaseStatement{Num(12), []Statement{&JumpStatement{ReturnJump, nil}}},
+		},
+		{
+			"(#case (#char 'c') :do [(#break)])",
+			CaseStatement{Char('c'), []Statement{&JumpStatement{BreakJump, nil}}},
+		},
+	}
+	for _, d := range data {
+		if res := d.node.String(); res != d.str {
+			t.Errorf("Expecting \n%s but got \n%s", d.str, res)
+		}
+	}
+}
+
+func TestSwitchStatement_PrettyPrint(t *testing.T) {
+	data := []struct {
+		str  string
+		node *SwitchStatement
+	}{
+		{
+			"(#switch (#field age) :case [(#case (#num 12) :do [(#return)])])",
+			&SwitchStatement{&FieldAccess{"age", nil},
+				[]*CaseStatement{
+					{Num(12), []Statement{&JumpStatement{ReturnJump, nil}}},
+				},
+				nil,
+			},
+		},
+		{
+			"(#switch (#field age) :case [] :default [(#return)])",
+			&SwitchStatement{&FieldAccess{"age", nil},
+				[]*CaseStatement{},
+				[]Statement{&JumpStatement{ReturnJump, nil}},
+			},
+		},
+	}
+	for _, d := range data {
+		if res := PrettyPrint(d.node); res != d.str {
+			t.Errorf("Expecting \n%s but got \n%s", d.str, res)
+		}
+	}
+}
