@@ -12,6 +12,32 @@ func withParser(s string, parserAction func(p *Parser)) {
 	})
 }
 
+func TestParser_jumpStmt(t *testing.T) {
+	data := []struct {
+		str    string
+		expect Statement
+	}{
+		{"return;", &JumpStatement{ReturnJump, nil}},
+		{"break;", &JumpStatement{BreakJump, nil}},
+		{"continue;", &JumpStatement{ContinueJump, nil}},
+		{"return 1;", &JumpStatement{ReturnJump, Num(1)}},
+		{"return new Hello();",
+			&JumpStatement{ReturnJump,
+				&ObjectCreation{MethodCall{"Hello", []Expression{}, nil}}
+			}
+		},
+	}
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			result := p.jumpStmt()
+			resStr, expectStr := PrettyPrint(result), PrettyPrint(d.expect)
+			if resStr != expectStr {
+				t.Errorf("Expecting: \n%s but got \n%s", expectStr, resStr)
+			}
+		})
+	}
+}
+
 func TestParser_expression(t *testing.T) {
 	data := []struct {
 		str    string

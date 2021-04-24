@@ -43,7 +43,20 @@ func (p *Parser) match(token TokenType) string {
 	return value
 }
 
-// FIXME: shoudl objectInitialization be in primaryExpression so
+func (p *Parser) jumpStmt() Statement {
+	key := p.match(Keyword)
+	jumpType, _ := jumpTypeMap[key]
+	stmt := &JumpStatement{jumpType, nil}
+
+	if jumpType == ReturnJump && p.curToken.Type != Semicolon {
+		stmt.Exp = p.expression()
+	}
+
+	p.match(Semicolon)
+	return stmt
+}
+
+// FIXME: should objectInitialization be in primaryExpression so
 // it could use surrounding parens, but the array cant tho
 func (p *Parser) expression() Expression {
 	if KeywordEqualTo(*p.curToken, "new") {
@@ -67,10 +80,10 @@ func (p *Parser) conditionalOrExp() Expression {
 func (p *Parser) conditionalAndExp() Expression {
 	left := p.relationalExp()
 	for p.curToken.Type == And {
-		orToken := *p.curToken
+		andToken := *p.curToken
 		p.match(And)
 		right := p.conditionalAndExp()
-		left = &BinOp{orToken, left, right}
+		left = &BinOp{andToken, left, right}
 	}
 	return left
 }

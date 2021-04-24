@@ -300,3 +300,47 @@ func (a *ArrayCreation) ChildNode() INode {
 func (a *ArrayCreation) IsExpression() bool {
 	return true
 }
+
+type Statement interface {
+	INode
+	IsStatement() bool
+}
+
+type JumpType int
+
+const (
+	ReturnJump JumpType = iota
+	BreakJump
+	ContinueJump
+)
+
+func (j JumpType) String() string {
+	return []string{
+		"return",
+		"break",
+		"continue",
+	}[j]
+}
+
+var jumpTypeMap = map[string]JumpType{
+	"return":   ReturnJump,
+	"break":    BreakJump,
+	"continue": ContinueJump,
+}
+
+type JumpStatement struct {
+	Type JumpType
+	Exp  Expression
+}
+
+func (r *JumpStatement) NodeContent() (string, string) {
+	return r.Type.String(), ""
+}
+
+func (r *JumpStatement) ChildNode() INode {
+	return r.Exp
+}
+
+func (r *JumpStatement) IsStatement() bool {
+	return true
+}
