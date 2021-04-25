@@ -11,6 +11,46 @@ func withParser(s string, parserAction func(p *Parser)) {
 		parserAction(&p)
 	})
 }
+func TestParser_whileStmt(t *testing.T) {
+	data := []struct {
+		str    string
+		expect WhileStatement
+	}{
+		{
+			"while(true) return 20;",
+			WhileStatement{Boolean(true), &JumpStatement{ReturnJump, Num(20)}},
+		},
+		{
+			`while(x > 0){
+while(true) return 20;
+}`,
+			WhileStatement{&BinOp{fakeToken(">", GreaterThan), &FieldAccess{"x", nil}, Num(0)},
+				StatementList{
+					&WhileStatement{Boolean(true), &JumpStatement{ReturnJump, Num(20)}}},
+			},
+		},
+		{
+			`while(isOk) if(isStillOk) break;
+`,
+			WhileStatement{&FieldAccess{"isOk", nil},
+				&IfStatement{
+					&FieldAccess{"isStillOk", nil},
+					&JumpStatement{BreakJump, nil},
+					nil,
+				},
+			},
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			whileStmt := p.whileStmt()
+			if res, ex := PrettyPrint(whileStmt), PrettyPrint(&d.expect); res != ex {
+				t.Errorf("Expecting \n%s but got \n%s", ex, res)
+			}
+		})
+	}
+}
 
 func TestParser_ifStmt(t *testing.T) {
 	data := []struct {
@@ -101,6 +141,7 @@ return 1;
 	}
 
 }
+
 func TestParser_switchStmt(t *testing.T) {
 	data := []struct {
 		str    string

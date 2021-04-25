@@ -486,3 +486,23 @@ func (i *IfStatement) ChildNode() INode {
 func (i *IfStatement) IsStatement() bool {
 	return true
 }
+
+type WhileStatement struct {
+	Condition Expression
+	Body      Statement
+}
+
+func (w *WhileStatement) NodeContent() (string, string) {
+	return "while", fmt.Sprintf("%s :body %s",
+		PrettyPrint(w.Condition),
+		PrettyPrint(w.Body),
+	)
+}
+
+func (w *WhileStatement) ChildNode() INode {
+	return nil
+}
+
+func (w *WhileStatement) IsStatement() bool {
+	return true
+}

@@ -63,10 +63,22 @@ func (p *Parser) statement() (stmt Statement) {
 			stmt = p.switchStmt()
 		case "if":
 			stmt = p.ifStmt()
+		case "while":
+			stmt = p.whileStmt()
 		}
 	}
 
-	return stmt
+	return
+}
+
+func (p *Parser) whileStmt() *WhileStatement {
+	var whileStmt WhileStatement
+	p.match(Keyword)
+	p.match(LeftParenthesis)
+	whileStmt.Condition = p.expression()
+	p.match(RightParenthesis)
+	whileStmt.Body = p.statement()
+	return &whileStmt
 }
 
 func (p *Parser) ifStmt() *IfStatement {
