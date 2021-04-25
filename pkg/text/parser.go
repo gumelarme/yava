@@ -51,15 +51,43 @@ func (p *Parser) statement() (stmt Statement) {
 			x := p.statement()
 			stmtList = append(stmtList, x)
 		}
-		// fmt.Print("Got one: ", stmtList.String())
 		p.match(RightCurlyBracket)
 		return stmtList
-	} else if KeywordEqualTo(*p.curToken, "return") || KeywordEqualTo(*p.curToken, "break") {
-		stmt = p.jumpStmt()
-	} else if KeywordEqualTo(*p.curToken, "switch") {
-		stmt = p.switchStmt()
 	}
+
+	if p.curToken.Type == Keyword {
+		switch p.curToken.Value() {
+		case "return", "break":
+			stmt = p.jumpStmt()
+		case "switch":
+			stmt = p.switchStmt()
+		case "if":
+			stmt = p.ifStmt()
+		}
+	}
+
 	return stmt
+}
+
+func (p *Parser) ifStmt() *IfStatement {
+	var ifStmt IfStatement
+	p.match(Keyword)
+	p.match(LeftParenthesis)
+	ifStmt.Condition = p.expression()
+	p.match(RightParenthesis)
+
+	ifStmt.Body = p.statement()
+
+	if p.curToken.Value() == "else" {
+		p.match(Keyword)
+		if p.curToken.Value() == "if" {
+			ifStmt.Else = p.ifStmt()
+		} else {
+			ifStmt.Else = p.statement()
+		}
+	}
+
+	return &ifStmt
 }
 
 func (p *Parser) switchStmt() *SwitchStatement {

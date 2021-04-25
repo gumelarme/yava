@@ -460,3 +460,29 @@ func (s *SwitchStatement) ChildNode() INode {
 func (s *SwitchStatement) IsStatement() bool {
 	return true
 }
+
+type IfStatement struct {
+	Condition Expression
+	Body      Statement
+	Else      Statement
+}
+
+func (i *IfStatement) NodeContent() (string, string) {
+	format := "%s :body %s"
+	args := []interface{}{
+		PrettyPrint(i.Condition),
+		PrettyPrint(i.Body),
+	}
+
+	if i.Else != nil {
+		format += " :else"
+	}
+	return "if", fmt.Sprintf(format, args...)
+}
+func (i *IfStatement) ChildNode() INode {
+	return i.Else
+}
+
+func (i *IfStatement) IsStatement() bool {
+	return true
+}

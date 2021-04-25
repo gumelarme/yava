@@ -12,7 +12,96 @@ func withParser(s string, parserAction func(p *Parser)) {
 	})
 }
 
-func estParser_switchStmt(t *testing.T) {
+func TestParser_ifStmt(t *testing.T) {
+	data := []struct {
+		str    string
+		expect IfStatement
+	}{
+		{
+			"if(name) return 20;",
+			IfStatement{&FieldAccess{"name", nil}, &JumpStatement{ReturnJump, Num(20)}, nil},
+		},
+
+		{
+			"if(name) return 20; else return 1;",
+			IfStatement{&FieldAccess{"name", nil}, &JumpStatement{ReturnJump, Num(20)}, &JumpStatement{ReturnJump, Num(1)}},
+		},
+		{
+			`if(name > 20){
+break;
+} else {
+return 12;
+}`,
+			IfStatement{
+				&BinOp{fakeToken(">", GreaterThan),
+					&FieldAccess{"name", nil},
+					Num(20),
+				},
+				&StatementList{
+					&JumpStatement{BreakJump, nil},
+				},
+				&StatementList{
+					&JumpStatement{ReturnJump, Num(12)},
+				},
+			},
+		},
+
+		{
+			`if(name){
+break;
+} else if (isOk()){
+return 12;
+}`,
+			IfStatement{&FieldAccess{"name", nil},
+				&StatementList{
+					&JumpStatement{BreakJump, nil},
+				},
+				// else if block
+				&IfStatement{&MethodCall{"isOk", []Expression{}, nil},
+					&StatementList{
+						&JumpStatement{ReturnJump, Num(12)},
+					},
+					nil,
+				},
+			},
+		},
+		{
+			`if(name){
+break;
+} else if (isOk()){
+return 12;
+} else {
+return 1;
+}`,
+			IfStatement{&FieldAccess{"name", nil},
+				&StatementList{
+					&JumpStatement{BreakJump, nil},
+				},
+				// else if block
+				&IfStatement{&MethodCall{"isOk", []Expression{}, nil},
+					&StatementList{
+						&JumpStatement{ReturnJump, Num(12)},
+					},
+					// else block
+					&StatementList{
+						&JumpStatement{ReturnJump, Num(1)},
+					},
+				},
+			},
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			ifres := p.ifStmt()
+			if res, ex := PrettyPrint(ifres), PrettyPrint(&d.expect); res != ex {
+				t.Errorf("Expecting \n%s but got \n%s", ex, res)
+			}
+		})
+	}
+
+}
+func TestParser_switchStmt(t *testing.T) {
 	data := []struct {
 		str    string
 		expect SwitchStatement

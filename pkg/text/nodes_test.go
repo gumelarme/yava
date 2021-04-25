@@ -176,3 +176,33 @@ func TestSwitchStatement_PrettyPrint(t *testing.T) {
 		}
 	}
 }
+
+func TestIfStatement_PrettyPrint(t *testing.T) {
+	data := []struct {
+		str  string
+		node IfStatement
+	}{
+		{
+			"(#if (#field name) :body (#return))",
+			IfStatement{&FieldAccess{"name", nil}, &JumpStatement{ReturnJump, nil}, nil},
+		},
+		{
+			"(#if (#field name) :body (#return) :else (#return (#num 1)))",
+			IfStatement{&FieldAccess{"name", nil}, &JumpStatement{ReturnJump, nil}, &JumpStatement{ReturnJump, Num(1)}},
+		},
+		{
+			"(#if (#field name) :body (#stmt-block (#if (#field what) :body (#return))) :else (#return (#num 1)))",
+			IfStatement{&FieldAccess{"name", nil},
+				&StatementList{
+					&IfStatement{&FieldAccess{"what", nil}, &JumpStatement{ReturnJump, nil}, nil},
+				},
+				&JumpStatement{ReturnJump, Num(1)}},
+		},
+	}
+
+	for _, d := range data {
+		if res := PrettyPrint(&d.node); res != d.str {
+			t.Errorf("Expecting \n%s but got \n%s", d.str, res)
+		}
+	}
+}
