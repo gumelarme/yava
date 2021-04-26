@@ -11,6 +11,56 @@ func withParser(s string, parserAction func(p *Parser)) {
 		parserAction(&p)
 	})
 }
+func TestParser_methodOrField(t *testing.T) {
+	data := []struct {
+		str    string
+		expect Statement
+	}{
+
+		{
+			"name = nice * method(1);",
+			&AssignmentStatement{fakeToken("=", Assignment),
+				&FieldAccess{"name", nil},
+				&BinOp{fakeToken("*", Multiplication),
+					&FieldAccess{"nice", nil},
+					&MethodCall{"method", []Expression{Num(1)}, nil},
+				},
+			},
+		},
+		{
+			"this.name = nice;",
+			&AssignmentStatement{fakeToken("=", Assignment),
+				&This{&FieldAccess{"name", nil}},
+				&FieldAccess{"nice", nil},
+			},
+		},
+		{
+			"Hello();",
+			&MethodCallStatement{&MethodCall{"Hello", []Expression{}, nil}},
+		},
+		{
+			"this.person.hello();",
+			&MethodCallStatement{
+				&This{
+					&FieldAccess{"person",
+						&MethodCall{"hello", []Expression{}, nil},
+					},
+				},
+			},
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			whileStmt := p.methodOrField()
+			if res, ex := PrettyPrint(whileStmt), PrettyPrint(d.expect); res != ex {
+				t.Errorf("Expecting \n%s but got \n%s", ex, res)
+			}
+		})
+	}
+
+}
+
 func TestParser_whileStmt(t *testing.T) {
 	data := []struct {
 		str    string

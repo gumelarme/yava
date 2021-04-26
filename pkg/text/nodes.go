@@ -2,6 +2,7 @@ package text
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -175,7 +176,6 @@ type NamedValue interface {
 	Expression
 	GetChild() NamedValue
 }
-
 type This struct {
 	Child NamedValue
 }
@@ -403,6 +403,34 @@ func (j *JumpStatement) IsStatement() bool {
 	return true
 }
 
+type AssignmentStatement struct {
+	Operator Token
+	Left     NamedValue
+	Right    Expression
+}
+
+func IdEndsAs(val NamedValue) string {
+	for val.GetChild() != nil {
+		val = val.GetChild()
+	}
+	return reflect.TypeOf(val).Elem().Name()
+}
+
+func (a *AssignmentStatement) NodeContent() (string, string) {
+	return "assignment", fmt.Sprintf("%s :left %s :right %s",
+		a.Operator.Value(),
+		PrettyPrint(a.Left),
+		PrettyPrint(a.Right),
+	)
+}
+func (a *AssignmentStatement) ChildNode() INode {
+	return nil
+}
+
+func (a *AssignmentStatement) IsStatement() bool {
+	return true
+}
+
 type CaseStatement struct {
 	Value         PrimitiveLiteral
 	StatementList StatementList
@@ -504,5 +532,21 @@ func (w *WhileStatement) ChildNode() INode {
 }
 
 func (w *WhileStatement) IsStatement() bool {
+	return true
+}
+
+type MethodCallStatement struct {
+	Method NamedValue
+}
+
+func (m *MethodCallStatement) NodeContent() (string, string) {
+	return "method-call-stmt", ""
+}
+
+func (m *MethodCallStatement) ChildNode() INode {
+	return m.Method
+}
+
+func (m *MethodCallStatement) IsStatement() bool {
 	return true
 }

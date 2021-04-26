@@ -65,10 +65,42 @@ func (p *Parser) statement() (stmt Statement) {
 			stmt = p.ifStmt()
 		case "while":
 			stmt = p.whileStmt()
+		case "this":
+			p.methodOrField()
 		}
+	} else if p.curToken.Type == Id {
+		p.methodOrField()
 	}
 
 	return
+}
+func (p *Parser) methodOrField() (s Statement) {
+	name := p.validName()
+	if end := IdEndsAs(name); end == "MethodCall" {
+		s = &MethodCallStatement{name}
+		p.match(Semicolon)
+	} else if end == "FieldAccess" {
+		s = p.assignmentStmt(name)
+	}
+	return
+}
+
+func (p *Parser) assignmentStmt(left NamedValue) *AssignmentStatement {
+	var assig AssignmentStatement
+	assig.Left = left
+	if t := p.curToken.Type; t == Assignment ||
+		t == AdditionAssignment ||
+		t == SubtractionAssignment ||
+		t == MultiplicationAssignment ||
+		t == DivisionAssignment ||
+		t == ModulusAssignment {
+		token := *p.curToken
+		p.match(t)
+		assig.Operator = token
+	}
+
+	assig.Right = p.conditionalOrExp()
+	return &assig
 }
 
 func (p *Parser) whileStmt() *WhileStatement {

@@ -5,6 +5,31 @@ import (
 	"testing"
 )
 
+func TestNamedValue_IdEndAs(t *testing.T) {
+	data := []struct {
+		expect string
+		obj    NamedValue
+	}{
+		{
+			"FieldAccess",
+			&FieldAccess{"hello", nil},
+		},
+		{
+			"MethodCall",
+			&FieldAccess{"hello", &MethodCall{"nice", []Expression{}, nil}},
+		},
+		{
+			"This",
+			&This{},
+		},
+	}
+
+	for _, d := range data {
+		if end := IdEndsAs(d.obj); end != d.expect {
+			t.Errorf("Expect %s but got %s", d.expect, end)
+		}
+	}
+}
 func TestFieldAccess_PrettyPrint(t *testing.T) {
 	data := []struct {
 		obj NamedValue
