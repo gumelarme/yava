@@ -168,9 +168,64 @@ func TestParser_methodOrField(t *testing.T) {
 
 	for _, d := range data {
 		withParser(d.str, func(p *Parser) {
-			stmt := p.methodOrField()
+			stmt := p.namedValueOrType()
 			if res, ex := PrettyPrint(stmt), PrettyPrint(d.expect); res != ex {
 				t.Errorf("From `%s` Expecting \n%s but got \n%s", d.str, ex, res)
+			}
+		})
+	}
+
+}
+func TestParser_forStmt(t *testing.T) {
+	data := []struct {
+		str    string
+		expect ForStatement
+	}{
+		{
+			`for(;;){}`,
+			ForStatement{nil, nil, nil, StatementList{}},
+		},
+		{
+			`for(;;){
+a += 1;
+}`,
+			ForStatement{nil, nil, nil, StatementList{
+				&AssignmentStatement{
+					fakeToken("+=", AdditionAssignment),
+					&FieldAccess{"a", nil},
+					Num(1),
+				},
+			}},
+		},
+		{
+			`for(;;) for(;;) return null;`,
+			ForStatement{nil, nil, nil, &ForStatement{nil, nil, nil, &JumpStatement{ReturnJump, Null{}}}},
+		},
+		{
+			`for(int i = 0; i > 0; i += 1){}`,
+			ForStatement{
+				&VariableDeclaration{NamedType{"int", false}, "i", Num(0)},
+				&BinOp{fakeToken(">", GreaterThan), &FieldAccess{"i", nil}, Num(0)},
+				&AssignmentStatement{fakeToken("+=", AdditionAssignment), &FieldAccess{"i", nil}, Num(1)},
+				StatementList{},
+			},
+		},
+		{
+			`for(i = 0; ; i += 1){}`,
+			ForStatement{
+				&AssignmentStatement{fakeToken("=", Assignment), &FieldAccess{"i", nil}, Num(0)},
+				nil,
+				&AssignmentStatement{fakeToken("+=", AdditionAssignment), &FieldAccess{"i", nil}, Num(1)},
+				StatementList{},
+			},
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			stmt := p.forStmt()
+			if res, ex := PrettyPrint(stmt), PrettyPrint(&d.expect); res != ex {
+				t.Errorf("Expecting \n%s but got \n%s", ex, res)
 			}
 		})
 	}

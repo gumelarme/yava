@@ -576,3 +576,44 @@ func (v *VariableDeclaration) ChildNode() INode {
 func (v *VariableDeclaration) IsStatement() bool {
 	return true
 }
+
+type ForStatement struct {
+	Init      Statement
+	Condition Expression
+	Update    Statement
+	Body      Statement
+}
+
+func (f *ForStatement) NodeContent() (string, string) {
+	format := ""
+	args := []interface{}{}
+	if f.Init != nil {
+		format += ":init %s"
+		args = append(args, PrettyPrint(f.Init))
+	}
+
+	if f.Condition != nil {
+		format += " :condition %s"
+		args = append(args, PrettyPrint(f.Condition))
+	}
+
+	if f.Update != nil {
+		format += " :update %s"
+		args = append(args, PrettyPrint(f.Update))
+	}
+
+	format += " :body"
+	if f.Body == nil {
+		format += "[]"
+	}
+
+	return "for", fmt.Sprintf(format, args)
+}
+
+func (f *ForStatement) ChildNode() INode {
+	return f.Body
+}
+
+func (f *ForStatement) IsStatement() bool {
+	return true
+}

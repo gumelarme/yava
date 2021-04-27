@@ -65,13 +65,18 @@ func (p *Parser) statement() (stmt Statement) {
 			stmt = p.ifStmt()
 		case "while":
 			stmt = p.whileStmt()
+		case "for":
+			stmt = p.forStmt()
 		case "this":
-			stmt = p.methodOrField()
+			stmt = p.varDeclarationOrMethodOrAssignment()
+			p.match(Semicolon)
 		case "int", "boolean", "char":
 			stmt = p.primitiveTypeVarDeclaration()
+			p.match(Semicolon)
 		}
 	} else if p.curToken.Type == Id {
-		stmt = p.methodOrField()
+		stmt = p.varDeclarationOrMethodOrAssignment()
+		p.match(Semicolon)
 	}
 
 	return
@@ -86,7 +91,6 @@ func (p *Parser) variableDeclaration(typeof NamedType) *VariableDeclaration {
 		p.match(Assignment)
 		vd.Value = p.expression()
 	}
-	p.match(Semicolon)
 	return &vd
 }
 
@@ -106,8 +110,9 @@ func (p *Parser) typeArray(name string) NamedType {
 	return ty
 }
 
-// methodOrField determine wether the keyword (this, int, bool, char)
-func (p *Parser) methodOrField() (s Statement) {
+// varDeclarationOrMethodOrAssignment determine wether the next statement
+// is variable-declaration, method-call or assignment statement
+func (p *Parser) varDeclarationOrMethodOrAssignment() (s Statement) {
 	var namedVal NamedValue
 	if p.curToken.Type == Keyword {
 		namedVal = p.validName()
@@ -132,11 +137,13 @@ func (p *Parser) methodOrField() (s Statement) {
 			namedVal = p.validName()
 		}
 	}
+	return p.methodOrAssignment(namedVal)
+}
 
+func (p *Parser) methodOrAssignment(namedVal NamedValue) (s Statement) {
 	end := IdEndsAs(namedVal)
 	if end == "MethodCall" {
 		s = &MethodCallStatement{namedVal}
-		p.match(Semicolon)
 	} else {
 		s = p.assignmentStmt(namedVal)
 	}
@@ -159,6 +166,48 @@ func (p *Parser) assignmentStmt(left NamedValue) *AssignmentStatement {
 
 	assig.Right = p.conditionalOrExp()
 	return &assig
+}
+
+func (p *Parser) varDeclarationOrAssignment() (stmt Statement) {
+	if p.curToken.Type == Keyword {
+		switch p.curToken.Value() {
+		case "int", "boolean", "char":
+			stmt = p.primitiveTypeVarDeclaration()
+		case "this":
+			stmt = p.varDeclarationOrMethodOrAssignment()
+		}
+	} else if p.curToken.Type == Id {
+		stmt = p.varDeclarationOrMethodOrAssignment()
+	}
+	return
+}
+
+func (p *Parser) forUpdate() (stmt Statement) {
+	if p.curToken.Type == RightParenthesis {
+		return
+	}
+	namedVal := p.validName()
+	return p.methodOrAssignment(namedVal)
+}
+
+func (p *Parser) forStmt() *ForStatement {
+	var f ForStatement
+	p.match(Keyword)
+	p.match(LeftParenthesis)
+
+	f.Init = p.varDeclarationOrAssignment()
+	p.match(Semicolon)
+
+	if p.curToken.Type != Semicolon {
+		f.Condition = p.expression()
+	}
+	p.match(Semicolon)
+
+	f.Update = p.forUpdate()
+	p.match(RightParenthesis)
+
+	f.Body = p.statement()
+	return &f
 }
 
 func (p *Parser) whileStmt() *WhileStatement {
