@@ -11,6 +11,103 @@ func withParser(s string, parserAction func(p *Parser)) {
 		parserAction(&p)
 	})
 }
+
+func TestParser_statement(t *testing.T) {
+	data := []struct {
+		str    string
+		expect Statement
+	}{
+		{
+			"int a = 20;",
+			&VariableDeclaration{NamedType{"int", false}, "a", Num(20)},
+		},
+		{
+			"int[] a = new int[20];",
+			&VariableDeclaration{NamedType{"int", true},
+				"a",
+				&ArrayCreation{"int", Num(20)},
+			},
+		},
+		{
+			`String a = "nice";`,
+			&VariableDeclaration{NamedType{"String", false}, "a", String("nice")},
+		},
+		{
+			`this.a = nice;`,
+			&AssignmentStatement{fakeToken("=", Assignment),
+				&This{&FieldAccess{"a", nil}},
+				&FieldAccess{"nice", nil},
+			},
+		},
+		{
+			`switch(a){
+		case 2:
+		if(a + b > 12) {
+		return 3;
+		}
+		}`,
+			&SwitchStatement{&FieldAccess{"a", nil},
+				[]*CaseStatement{
+					{
+						Num(2),
+						[]Statement{
+							&IfStatement{
+								&BinOp{fakeToken(">", GreaterThan),
+									&BinOp{fakeToken("+", Addition),
+										&FieldAccess{"a", nil},
+										&FieldAccess{"b", nil},
+									},
+									Num(12),
+								},
+								StatementList{&JumpStatement{ReturnJump, Num(3)}},
+								nil,
+							},
+						},
+					},
+				},
+				nil,
+			},
+		},
+	}
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			stmt := p.statement()
+			if res, ex := PrettyPrint(stmt), PrettyPrint(d.expect); res != ex {
+				t.Errorf("From `%s` Expecting \n%s but got \n%s", d.str, ex, res)
+			}
+		})
+	}
+}
+
+func TestParser_primitiveTypeVarDeclaration(t *testing.T) {
+	data := []struct {
+		str    string
+		expect Statement
+	}{
+		{
+			"int a = 20;",
+			&VariableDeclaration{NamedType{"int", false}, "a", Num(20)},
+		},
+		{
+			"int[] a = 20;",
+			&VariableDeclaration{NamedType{"int", true}, "a", Num(20)},
+		},
+		{
+			"boolean a = true;",
+			&VariableDeclaration{NamedType{"boolean", false}, "a", Boolean(true)},
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			whileStmt := p.primitiveTypeVarDeclaration()
+			if res, ex := PrettyPrint(whileStmt), PrettyPrint(d.expect); res != ex {
+				t.Errorf("From `%s` Expecting \n%s but got \n%s", d.str, ex, res)
+			}
+		})
+	}
+}
+
 func TestParser_methodOrField(t *testing.T) {
 	data := []struct {
 		str    string
@@ -48,13 +145,32 @@ func TestParser_methodOrField(t *testing.T) {
 				},
 			},
 		},
+		{
+			"Something a = new Something();",
+			&VariableDeclaration{NamedType{"Something", false}, "a",
+				&ObjectCreation{MethodCall{"Something", []Expression{}, nil}},
+			},
+		},
+		{
+			"Something[] a = new Something[4];",
+			&VariableDeclaration{NamedType{"Something", true}, "a",
+				&ArrayCreation{"Something", Num(4)},
+			},
+		},
+		{
+			"something[0] = 20;",
+			&AssignmentStatement{fakeToken("=", Assignment),
+				&FieldAccess{"something", &ArrayAccess{Num(0), nil}},
+				Num(20),
+			},
+		},
 	}
 
 	for _, d := range data {
 		withParser(d.str, func(p *Parser) {
-			whileStmt := p.methodOrField()
-			if res, ex := PrettyPrint(whileStmt), PrettyPrint(d.expect); res != ex {
-				t.Errorf("Expecting \n%s but got \n%s", ex, res)
+			stmt := p.methodOrField()
+			if res, ex := PrettyPrint(stmt), PrettyPrint(d.expect); res != ex {
+				t.Errorf("From `%s` Expecting \n%s but got \n%s", d.str, ex, res)
 			}
 		})
 	}
@@ -94,8 +210,8 @@ while(true) return 20;
 
 	for _, d := range data {
 		withParser(d.str, func(p *Parser) {
-			whileStmt := p.whileStmt()
-			if res, ex := PrettyPrint(whileStmt), PrettyPrint(&d.expect); res != ex {
+			stmt := p.whileStmt()
+			if res, ex := PrettyPrint(stmt), PrettyPrint(&d.expect); res != ex {
 				t.Errorf("Expecting \n%s but got \n%s", ex, res)
 			}
 		})
@@ -500,6 +616,27 @@ func TestParser_fieldAccess(t *testing.T) {
 	for _, d := range data {
 		withParser(d.str, func(p *Parser) {
 			result := p.fieldAccess()
+			if PrettyPrint(result) != PrettyPrint(d.expect) {
+				t.Errorf("Got %#v instead of %#v", PrettyPrint(result), PrettyPrint(d.expect))
+			}
+		})
+	}
+}
+
+func TestParser_fieldAccessFrom(t *testing.T) {
+	data := []struct {
+		name   string
+		str    string
+		expect NamedValue
+	}{
+		{"person", "", &FieldAccess{"person", nil}},
+		{"person", ".age", &FieldAccess{"person", &FieldAccess{"age", nil}}},
+		{"person", "()", &MethodCall{"person", []Expression{}, nil}},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			result := p.fieldAccessFrom(d.name)
 			if PrettyPrint(result) != PrettyPrint(d.expect) {
 				t.Errorf("Got %#v instead of %#v", PrettyPrint(result), PrettyPrint(d.expect))
 			}

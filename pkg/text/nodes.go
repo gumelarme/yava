@@ -33,7 +33,10 @@ func PrettyPrint(node INode) string {
 	return fmt.Sprintf(format, args...)
 }
 
-type NamedType string
+type NamedType struct {
+	Name    string
+	IsArray bool
+}
 
 type PrimitiveType string
 
@@ -548,5 +551,28 @@ func (m *MethodCallStatement) ChildNode() INode {
 }
 
 func (m *MethodCallStatement) IsStatement() bool {
+	return true
+}
+
+type VariableDeclaration struct {
+	Type  NamedType
+	Name  string
+	Value Expression
+}
+
+func (v *VariableDeclaration) NodeContent() (string, string) {
+	format := ":type %s"
+	if v.Type.IsArray {
+		format += "[]"
+	}
+
+	return "var-declaration", fmt.Sprintf(format, v.Type.Name)
+}
+
+func (v *VariableDeclaration) ChildNode() INode {
+	return v.Value
+}
+
+func (v *VariableDeclaration) IsStatement() bool {
 	return true
 }

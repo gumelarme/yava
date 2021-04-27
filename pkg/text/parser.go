@@ -66,21 +66,79 @@ func (p *Parser) statement() (stmt Statement) {
 		case "while":
 			stmt = p.whileStmt()
 		case "this":
-			p.methodOrField()
+			stmt = p.methodOrField()
+		case "int", "boolean", "char":
+			stmt = p.primitiveTypeVarDeclaration()
 		}
 	} else if p.curToken.Type == Id {
-		p.methodOrField()
+		stmt = p.methodOrField()
 	}
 
 	return
 }
+
+func (p *Parser) variableDeclaration(typeof NamedType) *VariableDeclaration {
+	var vd VariableDeclaration
+	vd.Type = typeof
+	vd.Name = p.match(Id)
+
+	if p.curToken.Type == Assignment {
+		p.match(Assignment)
+		vd.Value = p.expression()
+	}
+	p.match(Semicolon)
+	return &vd
+}
+
+func (p *Parser) primitiveTypeVarDeclaration() *VariableDeclaration {
+	name := p.primitiveType()
+	ty := p.typeArray(name)
+	return p.variableDeclaration(ty)
+}
+
+func (p *Parser) typeArray(name string) NamedType {
+	ty := NamedType{name, false}
+	if p.curToken.Type == LeftSquareBracket {
+		p.match(LeftSquareBracket)
+		p.match(RightSquareBracket)
+		ty.IsArray = true
+	}
+	return ty
+}
+
+// methodOrField determine wether the keyword (this, int, bool, char)
 func (p *Parser) methodOrField() (s Statement) {
-	name := p.validName()
-	if end := IdEndsAs(name); end == "MethodCall" {
-		s = &MethodCallStatement{name}
+	var namedVal NamedValue
+	if p.curToken.Type == Keyword {
+		namedVal = p.validName()
+	} else {
+		// ID here is ambiguous, either a type or var
+		peek, _ := p.lexer.PeekToken()
+		if peek.Type == Id {
+			ty := p.typeArray(p.match(Id))
+			return p.variableDeclaration(ty)
+
+		} else if peek.Type == LeftSquareBracket {
+			// [ can be an array-access or a type array
+			name := p.match(Id)
+			peek, _ = p.lexer.PeekToken()
+			if peek.Type == RightSquareBracket { // nothing in between []
+				ty := p.typeArray(name)
+				return p.variableDeclaration(ty)
+			}
+			namedVal = p.fieldAccessFrom(name)
+		} else {
+			// possibly a dot or a LeftParen
+			namedVal = p.validName()
+		}
+	}
+
+	end := IdEndsAs(namedVal)
+	if end == "MethodCall" {
+		s = &MethodCallStatement{namedVal}
 		p.match(Semicolon)
-	} else if end == "FieldAccess" {
-		s = p.assignmentStmt(name)
+	} else {
+		s = p.assignmentStmt(namedVal)
 	}
 	return
 }
@@ -340,8 +398,8 @@ func (p *Parser) primaryExp() (ex Expression) {
 		ex = p.conditionalOrExp()
 		p.match(RightParenthesis)
 	default:
-		//FIXME: What to do?
-		panic("Unexpected")
+		msg := fmt.Sprintf("Unexpected: %s", p.curToken)
+		panic(msg)
 	}
 
 	return
@@ -373,31 +431,58 @@ func (p *Parser) validName() (val NamedValue) {
 	return
 }
 
+func (p *Parser) fieldAccessFrom(name string) (val NamedValue) {
+	if p.curToken.Type == LeftParenthesis {
+		args := p.argumentList()
+		child := p.methodCallTail()
+		val = &MethodCall{name, args, child}
+	} else {
+		val = &FieldAccess{name, p.fieldAccessTail()}
+	}
+	return
+}
+
 func (p *Parser) fieldAccess() (val NamedValue) {
 	peek, _ := p.lexer.PeekToken()
 	if peek.Type == LeftParenthesis {
 		val = p.methodCall()
 	} else {
 		name := p.match(Id)
-		field := &FieldAccess{name, nil}
+		val = &FieldAccess{name, p.fieldAccessTail()}
+	}
+	return
+}
 
-		if t := p.curToken.Type; t == Dot {
-			p.match(Dot)
-			field.Child = p.fieldAccess()
-		} else if t == LeftSquareBracket {
-			field.Child = p.arrayAccess()
-		}
-		val = field
+func (p *Parser) fieldAccessTail() (val NamedValue) {
+	if t := p.curToken.Type; t == Dot {
+		p.match(Dot)
+		val = p.fieldAccess()
+	} else if t == LeftSquareBracket {
+		val = p.arrayAccess()
 	}
 	return
 }
 
 func (p *Parser) methodCall() *MethodCall {
-
 	name := p.match(Id)
-	p.match(LeftParenthesis)
-	args := []Expression{}
+	args := p.argumentList()
+	method := &MethodCall{name, args, p.methodCallTail()}
+	return method
+}
 
+func (p *Parser) methodCallTail() (val NamedValue) {
+	if t := p.curToken.Type; t == Dot {
+		p.match(Dot)
+		val = p.fieldAccess()
+	} else if t == LeftSquareBracket {
+		val = p.arrayAccess()
+	}
+	return
+}
+
+func (p *Parser) argumentList() []Expression {
+	args := []Expression{}
+	p.match(LeftParenthesis)
 	if p.curToken.Type != RightParenthesis {
 		args = append(args, p.expression())
 		for p.curToken.Type == Comma {
@@ -405,18 +490,8 @@ func (p *Parser) methodCall() *MethodCall {
 			args = append(args, p.expression())
 		}
 	}
-
-	method := &MethodCall{name, args, nil}
 	p.match(RightParenthesis)
-
-	if t := p.curToken.Type; t == Dot {
-		p.match(Dot)
-		method.Child = p.fieldAccess()
-	} else if t == LeftSquareBracket {
-		method.Child = p.arrayAccess()
-	}
-
-	return method
+	return args
 }
 
 func (p *Parser) arrayAccess() *ArrayAccess {
