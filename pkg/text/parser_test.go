@@ -12,6 +12,63 @@ func withParser(s string, parserAction func(p *Parser)) {
 	})
 }
 
+func TestParser_declarationList(t *testing.T) {
+	data := []struct {
+		str    string
+		expect Declaration
+	}{
+		{
+			"int a;",
+			&PropertyDeclaration{Public, VariableDeclaration{
+				NamedType{"int", false},
+				"a",
+				nil,
+			}},
+		},
+		{
+			"int[] a;",
+			&PropertyDeclaration{Public, VariableDeclaration{
+				NamedType{"int", true},
+				"a",
+				nil,
+			}},
+		},
+		{
+			"public int a;",
+			&PropertyDeclaration{Public, VariableDeclaration{
+				NamedType{"int", false},
+				"a",
+				nil,
+			}},
+		},
+		{
+			"private int a = 1;",
+			&PropertyDeclaration{Private, VariableDeclaration{
+				NamedType{"int", false},
+				"a",
+				Num(1),
+			}},
+		},
+		{
+			`String a = "Hello";`,
+			&PropertyDeclaration{Public, VariableDeclaration{
+				NamedType{"String", false},
+				"a",
+				String("Hello"),
+			}},
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			decl := p.declarationList()
+			if res, ex := PrettyPrint(decl), PrettyPrint(d.expect); res != ex {
+				t.Errorf("From `%s` Expecting \n%s but got \n%s", d.str, ex, res)
+			}
+		})
+	}
+}
+
 func TestParser_statement(t *testing.T) {
 	data := []struct {
 		str    string
@@ -71,8 +128,8 @@ func TestParser_statement(t *testing.T) {
 	}
 	for _, d := range data {
 		withParser(d.str, func(p *Parser) {
-			stmt := p.statement()
-			if res, ex := PrettyPrint(stmt), PrettyPrint(d.expect); res != ex {
+			decl := p.statement()
+			if res, ex := PrettyPrint(decl), PrettyPrint(d.expect); res != ex {
 				t.Errorf("From `%s` Expecting \n%s but got \n%s", d.str, ex, res)
 			}
 		})
@@ -168,7 +225,7 @@ func TestParser_methodOrField(t *testing.T) {
 
 	for _, d := range data {
 		withParser(d.str, func(p *Parser) {
-			stmt := p.namedValueOrType()
+			stmt := p.varDeclarationOrMethodOrAssignment()
 			if res, ex := PrettyPrint(stmt), PrettyPrint(d.expect); res != ex {
 				t.Errorf("From `%s` Expecting \n%s but got \n%s", d.str, ex, res)
 			}

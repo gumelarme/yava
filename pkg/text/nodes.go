@@ -617,3 +617,29 @@ func (f *ForStatement) ChildNode() INode {
 func (f *ForStatement) IsStatement() bool {
 	return true
 }
+
+type Declaration interface {
+	INode
+	GetAccessModifier() AccessModifier
+}
+
+type AccessModifier int
+
+const (
+	Public AccessModifier = iota
+	Protected
+	Private
+)
+
+type PropertyDeclaration struct {
+	AccessModifier
+	VariableDeclaration
+}
+
+func (p *PropertyDeclaration) NodeContent() (string, string) {
+	_, content := p.VariableDeclaration.NodeContent()
+	return "property-declaration", content
+}
+func (p *PropertyDeclaration) GetAccessModifier() AccessModifier {
+	return p.AccessModifier
+}

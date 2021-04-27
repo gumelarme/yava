@@ -43,6 +43,73 @@ func (p *Parser) match(token TokenType) string {
 	return value
 }
 
+var accessModMap = map[string]AccessModifier{
+	"public":    Public,
+	"protected": Protected,
+	"private":   Private,
+}
+
+func (p *Parser) accessModifier() (decl Declaration) {
+	var typename string
+	key := p.match(Keyword)
+	accessMod, _ := accessModMap[key]
+	if p.curToken.Type == Keyword {
+		if val := p.curToken.Value(); val == "static" {
+			// TODO: return main function
+		} else if val == "void" {
+
+		}
+		// int, boolean, char
+		typename = p.primitiveType()
+	} else {
+		typename = p.match(Id)
+	}
+	return p.propOrMethod(accessMod, typename)
+}
+
+func (p *Parser) propOrMethod(accessMod AccessModifier, typename string) (decl Declaration) {
+	namedType := p.typeArray(typename)
+	if peek, _ := p.lexer.PeekToken(); peek.Type == LeftParenthesis {
+		// TODO: implement method
+	} else {
+		decl = p.propertyDeclaration(accessMod, namedType)
+	}
+	return
+}
+
+func (p *Parser) declarationList() (decl Declaration) {
+	if p.curToken.Type == Keyword {
+		switch p.curToken.Value() {
+		case "void":
+		case "int", "boolean", "char":
+			typename := p.primitiveType()
+			decl = p.propOrMethod(Public, typename)
+		case "public", "private", "protected":
+			decl = p.accessModifier()
+		}
+	} else if p.curToken.Type == Id {
+		//TODO: check if its constructor
+		typename := p.match(Id)
+		decl = p.propOrMethod(Public, typename)
+	}
+	return
+}
+
+func (p *Parser) propertyDeclaration(acc AccessModifier, ty NamedType) *PropertyDeclaration {
+	var prop PropertyDeclaration
+	prop.AccessModifier = acc
+	prop.Type = ty
+	prop.Name = p.match(Id)
+
+	if p.curToken.Type == Assignment {
+		p.match(Assignment)
+		prop.Value = p.expression()
+	}
+	p.match(Semicolon)
+
+	return &prop
+}
+
 func (p *Parser) statement() (stmt Statement) {
 	if p.curToken.Type == LeftCurlyBracket {
 		p.match(LeftCurlyBracket)
