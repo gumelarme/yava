@@ -54,8 +54,9 @@ func (p *Parser) accessModifier() (decl Declaration) {
 	key := p.match(Keyword)
 	accessMod, _ := accessModMap[key]
 	if p.curToken.Type == Keyword {
-		if val := p.curToken.Value(); val == "static" {
-			// TODO: return main function
+
+		if val := p.curToken.Value(); val == "static" && accessMod == Public {
+			return p.mainMethodDeclaration()
 		} else if val == "void" {
 			p.match(Keyword)
 			return p.methodDeclaration(accessMod, NamedType{"void", false})
@@ -127,6 +128,35 @@ func (p *Parser) parameterList() (params []Parameter) {
 	return
 }
 
+func (p *Parser) mainMethodDeclaration() *MainMethod {
+	var main MainMethod
+	p.match(Keyword) // static
+
+	if retType := p.match(Keyword); retType != "void" {
+		panic("Expecting a void type for main method, instead got: " + retType)
+	}
+
+	if name := p.match(Id); name != "main" {
+		panic("Expecting a main method, instead got: " + name)
+	}
+	p.match(LeftParenthesis)
+	ty := p.typeArray(p.match(Id))
+
+	if ty != (NamedType{"String", true}) {
+		panic("Expecting a String[], instead got: " + ty.String())
+	}
+
+	arg := p.match(Id) // args
+	p.match(RightParenthesis)
+
+	main.AccessModifier = Public
+	main.ReturnType = NamedType{"void", false}
+	main.Name = "main"
+	main.ParameterList = []Parameter{{ty, arg}}
+	main.Body = p.statementList()
+
+	return &main
+}
 func (p *Parser) methodDeclaration(accessMod AccessModifier, typename NamedType) *MethodDeclaration {
 	var decl MethodDeclaration
 	decl.AccessModifier = accessMod

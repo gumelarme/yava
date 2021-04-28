@@ -102,6 +102,21 @@ return 1;
 				},
 			},
 		},
+		{
+			`public static void main(String[] args){
+return;
+}`,
+			&MainMethod{MethodDeclaration{Public,
+				"main",
+				NamedType{"void", false},
+				[]Parameter{
+					{NamedType{"String", true}, "args"},
+				},
+				StatementList{
+					&JumpStatement{ReturnJump, nil},
+				},
+			},
+			}},
 	}
 
 	for _, d := range data {
@@ -110,6 +125,21 @@ return 1;
 			if res, ex := PrettyPrint(decl), PrettyPrint(d.expect); res != ex {
 				t.Errorf("From `%s` Expecting \n%s but got \n%s", d.str, ex, res)
 			}
+		})
+	}
+}
+
+func TestParser_MainMethod(t *testing.T) {
+	str := []string{
+		"static int main()",
+		"static void nani()",
+		"static void main(int a)",
+	}
+
+	for _, s := range str {
+		withParser(s, func(p *Parser) {
+			defer assertPanic(t, fmt.Sprintf("Should panic on %s", s))
+			p.mainMethodDeclaration()
 		})
 	}
 }

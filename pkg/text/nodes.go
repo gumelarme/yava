@@ -702,3 +702,21 @@ func (m *MethodDeclaration) ChildNode() INode {
 func (m *MethodDeclaration) GetAccessModifier() AccessModifier {
 	return m.AccessModifier
 }
+
+type MainMethod struct {
+	MethodDeclaration
+}
+
+func (m *MainMethod) NodeContent() (string, string) {
+	format := "%s %s :type %s :param ["
+	if len(m.ParameterList) > 0 {
+		format += strings.Join(m.Signature(), ", ")
+	}
+
+	format += "]"
+	return "main-decl", fmt.Sprintf(format,
+		m.AccessModifier,
+		m.Name,
+		m.ReturnType,
+	)
+}
