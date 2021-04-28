@@ -57,7 +57,8 @@ func (p *Parser) accessModifier() (decl Declaration) {
 		if val := p.curToken.Value(); val == "static" {
 			// TODO: return main function
 		} else if val == "void" {
-
+			p.match(Keyword)
+			return p.methodDeclaration(accessMod, NamedType{"void", false})
 		}
 		// int, boolean, char
 		typename = p.primitiveType()
@@ -70,7 +71,7 @@ func (p *Parser) accessModifier() (decl Declaration) {
 func (p *Parser) propOrMethod(accessMod AccessModifier, typename string) (decl Declaration) {
 	namedType := p.typeArray(typename)
 	if peek, _ := p.lexer.PeekToken(); peek.Type == LeftParenthesis {
-		// TODO: implement method
+		decl = p.methodDeclaration(accessMod, namedType)
 	} else {
 		decl = p.propertyDeclaration(accessMod, namedType)
 	}
@@ -81,6 +82,8 @@ func (p *Parser) declarationList() (decl Declaration) {
 	if p.curToken.Type == Keyword {
 		switch p.curToken.Value() {
 		case "void":
+			p.match(Keyword)
+			decl = p.methodDeclaration(Public, NamedType{"void", false})
 		case "int", "boolean", "char":
 			typename := p.primitiveType()
 			decl = p.propOrMethod(Public, typename)
@@ -93,6 +96,45 @@ func (p *Parser) declarationList() (decl Declaration) {
 		decl = p.propOrMethod(Public, typename)
 	}
 	return
+}
+
+func (p *Parser) parameterList() (params []Parameter) {
+	isType := func() bool {
+		if p.curToken.Type == Id {
+			return true
+		}
+
+		if val := p.curToken.Value(); p.curToken.Type == Keyword &&
+			(val == "int" || val == "boolean" || val == "char") {
+			return true
+		}
+
+		return false
+	}
+
+	p.match(LeftParenthesis)
+	for isType() {
+		ty := p.typeArray(p.match(p.curToken.Type))
+		name := p.match(Id)
+		params = append(params, Parameter{ty, name})
+		if p.curToken.Type == Comma {
+			p.match(Comma)
+		} else {
+			break
+		}
+	}
+	p.match(RightParenthesis)
+	return
+}
+
+func (p *Parser) methodDeclaration(accessMod AccessModifier, typename NamedType) *MethodDeclaration {
+	var decl MethodDeclaration
+	decl.AccessModifier = accessMod
+	decl.ReturnType = typename
+	decl.Name = p.match(Id)
+	decl.ParameterList = p.parameterList()
+	decl.Body = p.statementList()
+	return &decl
 }
 
 func (p *Parser) propertyDeclaration(acc AccessModifier, ty NamedType) *PropertyDeclaration {
@@ -110,16 +152,20 @@ func (p *Parser) propertyDeclaration(acc AccessModifier, ty NamedType) *Property
 	return &prop
 }
 
+func (p *Parser) statementList() (stmtList StatementList) {
+	p.match(LeftCurlyBracket)
+	for p.curToken.Type != RightCurlyBracket {
+		x := p.statement()
+		stmtList = append(stmtList, x)
+	}
+
+	p.match(RightCurlyBracket)
+	return
+}
+
 func (p *Parser) statement() (stmt Statement) {
 	if p.curToken.Type == LeftCurlyBracket {
-		p.match(LeftCurlyBracket)
-		var stmtList StatementList
-		for p.curToken.Type != RightCurlyBracket {
-			x := p.statement()
-			stmtList = append(stmtList, x)
-		}
-		p.match(RightCurlyBracket)
-		return stmtList
+		return p.statementList()
 	}
 
 	if p.curToken.Type == Keyword {

@@ -38,6 +38,14 @@ type NamedType struct {
 	IsArray bool
 }
 
+func (n NamedType) String() string {
+	s := n.Name
+	if n.IsArray {
+		s += "[]"
+	}
+	return s
+}
+
 type PrimitiveType string
 
 const (
@@ -631,6 +639,14 @@ const (
 	Private
 )
 
+func (a AccessModifier) String() string {
+	return []string{
+		"public",
+		"protected",
+		"private",
+	}[a]
+}
+
 type PropertyDeclaration struct {
 	AccessModifier
 	VariableDeclaration
@@ -638,8 +654,51 @@ type PropertyDeclaration struct {
 
 func (p *PropertyDeclaration) NodeContent() (string, string) {
 	_, content := p.VariableDeclaration.NodeContent()
-	return "property-declaration", content
+	return "property-decl", content
 }
 func (p *PropertyDeclaration) GetAccessModifier() AccessModifier {
 	return p.AccessModifier
+}
+
+type Parameter struct {
+	Type NamedType
+	Name string
+}
+
+type MethodDeclaration struct {
+	AccessModifier
+	Name          string
+	ReturnType    NamedType
+	ParameterList []Parameter
+	Body          StatementList
+}
+
+func (m *MethodDeclaration) Signature() []string {
+	str := make([]string, len(m.ParameterList))
+	for i, param := range m.ParameterList {
+		str[i] = param.Type.String()
+	}
+	return str
+}
+func (m *MethodDeclaration) NodeContent() (string, string) {
+	format := "%s %s :type %s :param ["
+	if len(m.ParameterList) > 0 {
+		format += strings.Join(m.Signature(), ", ")
+	}
+
+	format += "]"
+	return "method-decl", fmt.Sprintf(format,
+		m.AccessModifier,
+		m.Name,
+		m.ReturnType,
+	)
+}
+
+func (m *MethodDeclaration) ChildNode() INode {
+	// TODO: implement node string
+	return m.Body
+}
+
+func (m *MethodDeclaration) GetAccessModifier() AccessModifier {
+	return m.AccessModifier
 }

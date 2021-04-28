@@ -57,6 +57,51 @@ func TestParser_declarationList(t *testing.T) {
 				String("Hello"),
 			}},
 		},
+		{
+			`void foo(){}`,
+			&MethodDeclaration{Public,
+				"foo",
+				NamedType{"void", false},
+				[]Parameter{},
+				StatementList{},
+			},
+		},
+		{
+			`private void foo(){}`,
+			&MethodDeclaration{Private,
+				"foo",
+				NamedType{"void", false},
+				[]Parameter{},
+				StatementList{},
+			},
+		},
+		{
+			`private int foo(int a){}`,
+			&MethodDeclaration{Private,
+				"foo",
+				NamedType{"int", false},
+				[]Parameter{
+					{NamedType{"int", false}, "a"},
+				},
+				StatementList{},
+			},
+		},
+		{
+			`private String foo(int a, String[] list){
+return 1;
+}`,
+			&MethodDeclaration{Private,
+				"foo",
+				NamedType{"String", false},
+				[]Parameter{
+					{NamedType{"int", false}, "a"},
+					{NamedType{"String", true}, "list"},
+				},
+				StatementList{
+					&JumpStatement{ReturnJump, Num(1)},
+				},
+			},
+		},
 	}
 
 	for _, d := range data {
@@ -271,6 +316,15 @@ a += 1;
 			`for(i = 0; ; i += 1){}`,
 			ForStatement{
 				&AssignmentStatement{fakeToken("=", Assignment), &FieldAccess{"i", nil}, Num(0)},
+				nil,
+				&AssignmentStatement{fakeToken("+=", AdditionAssignment), &FieldAccess{"i", nil}, Num(1)},
+				StatementList{},
+			},
+		},
+		{
+			`for(this.i = 0; ; i += 1){}`,
+			ForStatement{
+				&AssignmentStatement{fakeToken("=", Assignment), &This{&FieldAccess{"i", nil}}, Num(0)},
 				nil,
 				&AssignmentStatement{fakeToken("+=", AdditionAssignment), &FieldAccess{"i", nil}, Num(1)},
 				StatementList{},
