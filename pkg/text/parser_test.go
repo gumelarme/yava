@@ -24,7 +24,7 @@ func TestParser_class(t *testing.T) {
 	class2.Properties["a"] = &class2Prop
 
 	class3 := NewEmptyClass("Hello", nil, nil)
-	class3Method := MethodDeclaration{
+	class3Method := NewMethodDeclaration(
 		Private,
 		NamedType{"void", false},
 		"Nothing",
@@ -32,12 +32,12 @@ func TestParser_class(t *testing.T) {
 		StatementList{
 			&JumpStatement{ReturnJump, nil},
 		},
-	}
+	)
 	class3.Methods[class3Method.Name] = make(map[string]*MethodDeclaration)
-	class3.Methods[class3Method.Name][class3Method.Signature()] = &class3Method
+	class3.Methods[class3Method.Name][class3Method.Signature()] = class3Method
 
 	class4 := NewEmptyClass("Hello", nil, nil)
-	class4Constructor := ConstructorDeclaration{MethodDeclaration{
+	class4Constructor := ConstructorDeclaration{*NewMethodDeclaration(
 		Private,
 		NamedType{"<this>", false},
 		"Hello",
@@ -45,11 +45,11 @@ func TestParser_class(t *testing.T) {
 		StatementList{
 			&JumpStatement{ReturnJump, nil},
 		},
-	}}
+	)}
 	class4.Constructor[class4Constructor.Signature()] = &class4Constructor
 
 	class5 := NewEmptyClass("Hello", nil, nil)
-	class5Main := MainMethodDeclaration{MethodDeclaration{
+	class5Main := MainMethodDeclaration{*NewMethodDeclaration(
 		Public,
 		NamedType{"void", false},
 		"main",
@@ -59,22 +59,22 @@ func TestParser_class(t *testing.T) {
 		StatementList{
 			&JumpStatement{ReturnJump, nil},
 		},
-	}}
+	)}
 	class5.MainMethod = &class5Main
 
 	classCombined := NewEmptyClass("Hello", nil, nil)
 	classCombined.Properties[class2Prop.GetName()] = &class2Prop
 
 	classCombined.Methods[class3Method.Name] = make(map[string]*MethodDeclaration)
-	classCombined.Methods[class3Method.Name][class3Method.Signature()] = &class3Method
+	classCombined.Methods[class3Method.Name][class3Method.Signature()] = class3Method
 
 	classCombined.Constructor[class4Constructor.Signature()] = &class4Constructor
 	classCombined.MainMethod = &class5Main
 
 	classOverloading := NewEmptyClass("Hello", nil, nil)
 	classOverloading.Methods[class3Method.Name] = make(map[string]*MethodDeclaration)
-	classOverloading.Methods[class3Method.Name][class3Method.Signature()] = &class3Method
-	overLoadMethod := MethodDeclaration{
+	classOverloading.Methods[class3Method.Name][class3Method.Signature()] = class3Method
+	overLoadMethod := NewMethodDeclaration(
 		Private,
 		NamedType{"void", false},
 		"Nothing",
@@ -84,8 +84,8 @@ func TestParser_class(t *testing.T) {
 		StatementList{
 			&JumpStatement{ReturnJump, nil},
 		},
-	}
-	classOverloading.Methods[class3Method.Name][overLoadMethod.Signature()] = &overLoadMethod
+	)
+	classOverloading.Methods[class3Method.Name][overLoadMethod.Signature()] = overLoadMethod
 
 	data := []struct {
 		str    string
@@ -275,38 +275,38 @@ func TestParser_declaration(t *testing.T) {
 		},
 		{
 			`void foo(){}`,
-			&MethodDeclaration{Public,
+			NewMethodDeclaration(Public,
 				NamedType{"void", false},
 				"foo",
 				[]Parameter{},
 				StatementList{},
-			},
+			),
 		},
 		{
 			`private void foo(){}`,
-			&MethodDeclaration{Private,
+			NewMethodDeclaration(Private,
 				NamedType{"void", false},
 				"foo",
 				[]Parameter{},
 				StatementList{},
-			},
+			),
 		},
 		{
 			`private int foo(int a){}`,
-			&MethodDeclaration{Private,
+			NewMethodDeclaration(Private,
 				NamedType{"int", false},
 				"foo",
 				[]Parameter{
 					{NamedType{"int", false}, "a"},
 				},
 				StatementList{},
-			},
+			),
 		},
 		{
 			`private String foo(int a, String[] list){
 return 1;
 }`,
-			&MethodDeclaration{Private,
+			NewMethodDeclaration(Private,
 				NamedType{"String", false},
 				"foo",
 				[]Parameter{
@@ -316,13 +316,13 @@ return 1;
 				StatementList{
 					&JumpStatement{ReturnJump, Num(1)},
 				},
-			},
+			),
 		},
 		{
 			`public static void main(String[] args){
 return;
 }`,
-			&MainMethodDeclaration{MethodDeclaration{Public,
+			&MainMethodDeclaration{*NewMethodDeclaration(Public,
 				NamedType{"void", false},
 				"main",
 				[]Parameter{
@@ -331,7 +331,7 @@ return;
 				StatementList{
 					&JumpStatement{ReturnJump, nil},
 				},
-			},
+			),
 			}},
 		{
 			"Hello(){}",

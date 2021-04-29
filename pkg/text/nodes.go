@@ -694,15 +694,48 @@ type Parameter struct {
 	Name string
 }
 
-type MethodDeclaration struct {
+type MethodSignature struct {
 	AccessModifier
 	ReturnType    NamedType
 	Name          string
 	ParameterList []Parameter
-	Body          StatementList
 }
 
-func (m *MethodDeclaration) Signature() string {
+func (m *MethodSignature) GetName() string {
+	return m.Name
+}
+
+func (m *MethodSignature) GetAccessModifier() AccessModifier {
+	return m.AccessModifier
+}
+
+func (m *MethodSignature) ChildNode() INode {
+	return nil
+}
+
+func (m *MethodSignature) NodeContent() (string, string) {
+	format := "%s %s :type %s :param ["
+	if len(m.ParameterList) > 0 {
+		format += strings.Join(m.ParamSignature(), ", ")
+	}
+
+	format += "]"
+	return "method-signature", fmt.Sprintf(format,
+		m.AccessModifier,
+		m.Name,
+		m.ReturnType,
+	)
+}
+
+func (m *MethodSignature) ParamSignature() []string {
+	str := make([]string, len(m.ParameterList))
+	for i, param := range m.ParameterList {
+		str[i] = param.Type.String()
+	}
+	return str
+}
+
+func (m *MethodSignature) Signature() string {
 	return fmt.Sprintf("<%s> %s (%s)",
 		m.ReturnType.String(),
 		m.Name,
@@ -710,38 +743,32 @@ func (m *MethodDeclaration) Signature() string {
 	)
 }
 
-func (m *MethodDeclaration) ParamSignature() []string {
-	str := make([]string, len(m.ParameterList))
-	for i, param := range m.ParameterList {
-		str[i] = param.Type.String()
-	}
-	return str
+type MethodDeclaration struct {
+	MethodSignature
+	Body StatementList
 }
-func (m *MethodDeclaration) NodeContent() (string, string) {
-	format := "%s %s :type %s :param ["
-	if len(m.ParameterList) > 0 {
-		format += strings.Join(m.ParamSignature(), ", ")
-	}
 
-	format += "]"
-	return "method-decl", fmt.Sprintf(format,
-		m.AccessModifier,
-		m.Name,
-		m.ReturnType,
-	)
+func NewMethodDeclaration(
+	accessMod AccessModifier,
+	rettype NamedType,
+	name string,
+	param []Parameter,
+	body StatementList,
+) *MethodDeclaration {
+	return &MethodDeclaration{
+		MethodSignature{accessMod, rettype, name, param},
+		body,
+	}
+}
+
+func (m *MethodDeclaration) NodeContent() (string, string) {
+	_, content := m.MethodSignature.NodeContent()
+	return "method-decl", content
 }
 
 func (m *MethodDeclaration) ChildNode() INode {
 	// TODO: implement node string
 	return m.Body
-}
-
-func (m *MethodDeclaration) GetAccessModifier() AccessModifier {
-	return m.AccessModifier
-}
-
-func (m *MethodDeclaration) GetName() string {
-	return m.Name
 }
 
 func (m *MethodDeclaration) GetType() DeclarationType {
@@ -775,13 +802,16 @@ type ConstructorDeclaration struct {
 }
 
 func NewConstructor(acc AccessModifier, name string, param []Parameter, body StatementList) *ConstructorDeclaration {
-	return &ConstructorDeclaration{MethodDeclaration{
-		acc,
-		NamedType{"<this>", false},
-		name,
-		param,
-		body,
-	}}
+	return &ConstructorDeclaration{
+		MethodDeclaration{
+			MethodSignature{
+				acc,
+				NamedType{"<this>", false},
+				name,
+				param,
+			},
+			body,
+		}}
 }
 func (c *ConstructorDeclaration) NodeContent() (string, string) {
 	_, content := c.MethodDeclaration.NodeContent()
@@ -793,7 +823,8 @@ func (c *ConstructorDeclaration) GetType() DeclarationType {
 }
 
 type Interface struct {
-	Name string
+	Name    string
+	Methods []MethodSignature
 }
 
 type Class struct {
