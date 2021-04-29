@@ -813,6 +813,7 @@ func NewConstructor(acc AccessModifier, name string, param []Parameter, body Sta
 			body,
 		}}
 }
+
 func (c *ConstructorDeclaration) NodeContent() (string, string) {
 	_, content := c.MethodDeclaration.NodeContent()
 	return "constructor", content
@@ -824,7 +825,44 @@ func (c *ConstructorDeclaration) GetType() DeclarationType {
 
 type Interface struct {
 	Name    string
-	Methods []MethodSignature
+	Methods map[string]*MethodSignature
+}
+
+func NewInterface(name string) *Interface {
+	return &Interface{
+		name,
+		make(map[string]*MethodSignature),
+	}
+}
+
+func (i *Interface) AddMethod(method *MethodSignature) {
+	if i.Methods == nil {
+		i.Methods = make(map[string]*MethodSignature)
+	}
+
+	if _, ok := i.Methods[method.Signature()]; ok {
+		panic("Method with the same signature already exist.")
+	}
+
+	i.Methods[method.Signature()] = method
+}
+
+func (i *Interface) NodeContent() (string, string) {
+	methods := make([]string, len(i.Methods))
+	j := 0
+	for _, m := range i.Methods {
+		methods[j] = PrettyPrint(m)
+		j += 1
+	}
+	return "interface",
+		fmt.Sprintf("%s \n\t:methods [%s]",
+			i.Name,
+			strings.Join(methods, ", "),
+		)
+}
+
+func (i *Interface) ChildNode() INode {
+	return nil
 }
 
 type Class struct {

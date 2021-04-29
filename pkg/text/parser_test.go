@@ -12,6 +12,66 @@ func withParser(s string, parserAction func(p *Parser)) {
 	})
 }
 
+func TestParser_interface(t *testing.T) {
+	method1 := MethodSignature{Public, NamedType{"int", false}, "Count", []Parameter{}}
+	method2 := MethodSignature{Public, NamedType{"String", false}, "Quack", []Parameter{}}
+	int1 := NewInterface("Something")
+
+	int2 := NewInterface("Something")
+	int2.Methods[method1.Signature()] = &method1
+
+	int3 := NewInterface("Something")
+	int3.Methods[method2.Signature()] = &method2
+
+	int4 := NewInterface("Something")
+	int4.Methods[method1.Signature()] = &method1
+	int4.Methods[method2.Signature()] = &method2
+
+	data := []struct {
+		str    string
+		expect *Interface
+	}{
+		{
+			`interface Something {}`,
+			int1,
+		},
+		{
+			`interface Something {public int Count();}`,
+			int2,
+		},
+		{
+			`interface Something {String Quack();}`,
+			int3,
+		},
+		{
+			`interface Something {int Count(); String Quack();}`,
+			int4,
+		},
+	}
+
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			res := p.interfaceDeclaration()
+			if resStr, expStr := PrettyPrint(res), PrettyPrint(d.expect); resStr != expStr {
+				t.Errorf("Expecting \n%s \n----but got----\n%s", expStr, resStr)
+			}
+		})
+	}
+}
+
+func TestParser_interface_panic(t *testing.T) {
+	str := []string{
+		"interface Something{int Count(); int Count();}",
+	}
+	for _, s := range str {
+		withParser(s, func(p *Parser) {
+			defer assertPanic(t, fmt.Sprintf("Should have panic on \n%s", s))
+			p.interfaceDeclaration()
+		})
+	}
+
+}
+
 func TestParser_class(t *testing.T) {
 	class1 := NewEmptyClass("Hello", nil, nil)
 
@@ -217,6 +277,10 @@ func TestParser_class_panic(t *testing.T) {
 		`class Something{
 			public static void main(String[] args){}
 			public static void main(String[] a){}
+		}`,
+
+		`class Something{
+			private static void main(String[] args){}
 		}`,
 	}
 

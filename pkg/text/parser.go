@@ -58,6 +58,28 @@ func (p *Parser) program() {
 	}
 }
 
+func (p *Parser) interfaceDeclaration() *Interface {
+	var i Interface
+	p.match(Keyword) // interface
+	i.Name = p.match(Id)
+	p.match(LeftCurlyBracket)
+	for p.curToken.Type != RightCurlyBracket {
+		signature := p.methodSignature()
+		i.AddMethod(signature)
+	}
+	p.match(RightCurlyBracket)
+	return &i
+}
+func (p *Parser) methodSignature() *MethodSignature {
+	var method MethodSignature
+	method.AccessModifier = p.accessModifier()
+	method.ReturnType = p.declarationType()
+	method.Name = p.match(Id)
+	method.ParameterList = p.parameterList()
+	p.match(Semicolon)
+	return &method
+}
+
 func (p *Parser) classDeclaration() *Class {
 	p.match(Keyword)
 	class := NewEmptyClass(p.match(Id), nil, nil)
