@@ -720,3 +720,17 @@ func (m *MainMethod) NodeContent() (string, string) {
 		m.ReturnType,
 	)
 }
+
+type Constructor struct {
+	MethodDeclaration
+}
+
+func NewConstructor(acc AccessModifier, name string, param []Parameter, body StatementList) *Constructor {
+	return &Constructor{MethodDeclaration{
+		acc,
+		name,
+		NamedType{"<this>", false},
+		param,
+		body,
+	}}
+}

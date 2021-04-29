@@ -117,11 +117,28 @@ return;
 				},
 			},
 			}},
+		{
+			"Hello(){}",
+			NewConstructor(Public, "Hello", []Parameter{}, StatementList{}),
+		},
+		{
+			"public Hello(int who){ return 1;}",
+			NewConstructor(
+				Public,
+				"Hello",
+				[]Parameter{
+					{NamedType{"int", false}, "who"},
+				},
+				StatementList{
+					&JumpStatement{ReturnJump, Num(1)},
+				},
+			),
+		},
 	}
 
 	for _, d := range data {
 		withParser(d.str, func(p *Parser) {
-			decl := p.declarationList()
+			decl := p.declaration()
 			if res, ex := PrettyPrint(decl), PrettyPrint(d.expect); res != ex {
 				t.Errorf("From `%s` Expecting \n%s but got \n%s", d.str, ex, res)
 			}
@@ -133,7 +150,8 @@ func TestParser_MainMethod(t *testing.T) {
 	str := []string{
 		"static int main()",
 		"static void nani()",
-		"static void main(int a)",
+		"static void main(String a)",
+		"static void main(int[] a)",
 	}
 
 	for _, s := range str {

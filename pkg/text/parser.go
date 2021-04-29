@@ -49,54 +49,53 @@ var accessModMap = map[string]AccessModifier{
 	"private":   Private,
 }
 
-func (p *Parser) accessModifier() (decl Declaration) {
-	var typename string
-	key := p.match(Keyword)
-	accessMod, _ := accessModMap[key]
-	if p.curToken.Type == Keyword {
-
-		if val := p.curToken.Value(); val == "static" && accessMod == Public {
-			return p.mainMethodDeclaration()
-		} else if val == "void" {
-			p.match(Keyword)
-			return p.methodDeclaration(accessMod, NamedType{"void", false})
+func (p *Parser) declaration() (decl Declaration) {
+	accessMod := p.accessModifier()
+	if p.curToken.Value() == "static" {
+		if accessMod != Public {
+			panic("Expected to be a main method!")
 		}
-		// int, boolean, char
-		typename = p.primitiveType()
-	} else {
-		typename = p.match(Id)
+		return p.mainMethodDeclaration()
 	}
-	return p.propOrMethod(accessMod, typename)
+
+	ty := p.declarationType()
+	// its certainly a constructor, and the type is actually a name
+	if p.curToken.Type == LeftParenthesis {
+		return p.constructorDeclaration(accessMod, ty.Name)
+	}
+
+	peek, _ := p.lexer.PeekToken()
+
+	if peek.Type == LeftParenthesis {
+		return p.methodDeclaration(accessMod, ty)
+	} else {
+		return p.propertyDeclaration(accessMod, ty)
+	}
 }
 
-func (p *Parser) propOrMethod(accessMod AccessModifier, typename string) (decl Declaration) {
-	namedType := p.typeArray(typename)
-	if peek, _ := p.lexer.PeekToken(); peek.Type == LeftParenthesis {
-		decl = p.methodDeclaration(accessMod, namedType)
-	} else {
-		decl = p.propertyDeclaration(accessMod, namedType)
+func (p *Parser) accessModifier() (acc AccessModifier) {
+	if val := p.curToken.Value(); val == "public" ||
+		val == "private" || val == "protected" {
+
+		key := p.match(Keyword)
+		acc = accessModMap[key]
 	}
 	return
 }
 
-func (p *Parser) declarationList() (decl Declaration) {
+func (p *Parser) declarationType() NamedType {
+	var name string
 	if p.curToken.Type == Keyword {
-		switch p.curToken.Value() {
-		case "void":
+		if p.curToken.Value() != "void" {
+			name = p.primitiveType()
+		} else {
 			p.match(Keyword)
-			decl = p.methodDeclaration(Public, NamedType{"void", false})
-		case "int", "boolean", "char":
-			typename := p.primitiveType()
-			decl = p.propOrMethod(Public, typename)
-		case "public", "private", "protected":
-			decl = p.accessModifier()
+			name = "void"
 		}
-	} else if p.curToken.Type == Id {
-		//TODO: check if its constructor
-		typename := p.match(Id)
-		decl = p.propOrMethod(Public, typename)
+	} else {
+		name = p.match(Id)
 	}
-	return
+	return p.typeArray(name)
 }
 
 func (p *Parser) parameterList() (params []Parameter) {
@@ -139,10 +138,11 @@ func (p *Parser) mainMethodDeclaration() *MainMethod {
 	if name := p.match(Id); name != "main" {
 		panic("Expecting a main method, instead got: " + name)
 	}
+
 	p.match(LeftParenthesis)
 	ty := p.typeArray(p.match(Id))
 
-	if ty != (NamedType{"String", true}) {
+	if !(ty.IsArray && ty.Name == "String") {
 		panic("Expecting a String[], instead got: " + ty.String())
 	}
 
@@ -157,6 +157,10 @@ func (p *Parser) mainMethodDeclaration() *MainMethod {
 
 	return &main
 }
+func (p *Parser) constructorDeclaration(accessMod AccessModifier, name string) *Constructor {
+	return NewConstructor(accessMod, name, p.parameterList(), p.statementList())
+}
+
 func (p *Parser) methodDeclaration(accessMod AccessModifier, typename NamedType) *MethodDeclaration {
 	var decl MethodDeclaration
 	decl.AccessModifier = accessMod
@@ -428,7 +432,7 @@ func (p *Parser) caseStmt() *CaseStatement {
 
 func (p *Parser) jumpStmt() Statement {
 	key := p.match(Keyword)
-	jumpType, _ := jumpTypeMap[key]
+	jumpType := jumpTypeMap[key]
 	stmt := &JumpStatement{jumpType, nil}
 
 	if jumpType == ReturnJump && p.curToken.Type != Semicolon {
