@@ -49,6 +49,28 @@ var accessModMap = map[string]AccessModifier{
 	"private":   Private,
 }
 
+func (p *Parser) program() {
+	if p.curToken.Type != Keyword {
+		panic("Expecting class or interface declaration")
+	}
+
+	if p.curToken.Value() == "class" {
+	}
+}
+
+func (p *Parser) classDeclaration() *Class {
+	p.match(Keyword)
+	class := NewEmptyClass(p.match(Id), nil, nil)
+	p.match(LeftCurlyBracket)
+	for p.curToken.Type != RightCurlyBracket {
+		decl := p.declaration()
+		class.AddDeclaration(decl)
+	}
+	p.match(RightCurlyBracket)
+
+	return class
+}
+
 func (p *Parser) declaration() (decl Declaration) {
 	accessMod := p.accessModifier()
 	if p.curToken.Value() == "static" {
@@ -127,8 +149,8 @@ func (p *Parser) parameterList() (params []Parameter) {
 	return
 }
 
-func (p *Parser) mainMethodDeclaration() *MainMethod {
-	var main MainMethod
+func (p *Parser) mainMethodDeclaration() *MainMethodDeclaration {
+	var main MainMethodDeclaration
 	p.match(Keyword) // static
 
 	if retType := p.match(Keyword); retType != "void" {
@@ -157,7 +179,7 @@ func (p *Parser) mainMethodDeclaration() *MainMethod {
 
 	return &main
 }
-func (p *Parser) constructorDeclaration(accessMod AccessModifier, name string) *Constructor {
+func (p *Parser) constructorDeclaration(accessMod AccessModifier, name string) *ConstructorDeclaration {
 	return NewConstructor(accessMod, name, p.parameterList(), p.statementList())
 }
 

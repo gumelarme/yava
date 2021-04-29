@@ -12,7 +12,223 @@ func withParser(s string, parserAction func(p *Parser)) {
 	})
 }
 
-func TestParser_declarationList(t *testing.T) {
+func TestParser_class(t *testing.T) {
+	class1 := NewEmptyClass("Hello", nil, nil)
+
+	class2 := NewEmptyClass("Hello", nil, nil)
+	class2Prop := PropertyDeclaration{Public,
+		VariableDeclaration{
+			NamedType{"int", false}, "a", Num(20),
+		},
+	}
+	class2.Properties["a"] = &class2Prop
+
+	class3 := NewEmptyClass("Hello", nil, nil)
+	class3Method := MethodDeclaration{
+		Private,
+		NamedType{"void", false},
+		"Nothing",
+		[]Parameter{},
+		StatementList{
+			&JumpStatement{ReturnJump, nil},
+		},
+	}
+	class3.Methods[class3Method.Name] = make(map[string]*MethodDeclaration)
+	class3.Methods[class3Method.Name][class3Method.Signature()] = &class3Method
+
+	class4 := NewEmptyClass("Hello", nil, nil)
+	class4Constructor := ConstructorDeclaration{MethodDeclaration{
+		Private,
+		NamedType{"<this>", false},
+		"Hello",
+		[]Parameter{},
+		StatementList{
+			&JumpStatement{ReturnJump, nil},
+		},
+	}}
+	class4.Constructor[class4Constructor.Signature()] = &class4Constructor
+
+	class5 := NewEmptyClass("Hello", nil, nil)
+	class5Main := MainMethodDeclaration{MethodDeclaration{
+		Public,
+		NamedType{"void", false},
+		"main",
+		[]Parameter{
+			{NamedType{"String", true}, "args"},
+		},
+		StatementList{
+			&JumpStatement{ReturnJump, nil},
+		},
+	}}
+	class5.MainMethod = &class5Main
+
+	classCombined := NewEmptyClass("Hello", nil, nil)
+	classCombined.Properties[class2Prop.GetName()] = &class2Prop
+
+	classCombined.Methods[class3Method.Name] = make(map[string]*MethodDeclaration)
+	classCombined.Methods[class3Method.Name][class3Method.Signature()] = &class3Method
+
+	classCombined.Constructor[class4Constructor.Signature()] = &class4Constructor
+	classCombined.MainMethod = &class5Main
+
+	classOverloading := NewEmptyClass("Hello", nil, nil)
+	classOverloading.Methods[class3Method.Name] = make(map[string]*MethodDeclaration)
+	classOverloading.Methods[class3Method.Name][class3Method.Signature()] = &class3Method
+	overLoadMethod := MethodDeclaration{
+		Private,
+		NamedType{"void", false},
+		"Nothing",
+		[]Parameter{
+			{NamedType{"int", false}, "a"},
+		},
+		StatementList{
+			&JumpStatement{ReturnJump, nil},
+		},
+	}
+	classOverloading.Methods[class3Method.Name][overLoadMethod.Signature()] = &overLoadMethod
+
+	data := []struct {
+		str    string
+		expect *Class
+	}{
+		{
+			"class Hello{}",
+			class1,
+		},
+		{
+			`
+class Hello{
+	int a = 20;
+}
+`,
+			class2,
+		},
+		{
+			`
+class Hello{
+	private void Nothing(){
+		return;
+	}
+}
+`,
+			class3,
+		},
+		{
+			`
+class Hello{
+	private Hello(){
+		return;
+	}
+}
+`,
+			class4,
+		},
+		{
+			`
+class Hello{
+	public static void main(String[] args){
+		return;
+	}
+}
+`,
+			class5,
+		},
+		{
+			`
+class Hello{
+	int a = 20;
+	private Hello(){
+		return;
+	}
+	private void Nothing(){
+		return;
+	}
+	public static void main(String[] args){
+		return;
+	}
+}
+`,
+			classCombined,
+		},
+
+		{
+			`
+class Hello{
+	private void Nothing(){
+		return;
+	}
+
+	private void Nothing(int a){
+		return;
+	}
+}
+`,
+			classOverloading,
+		},
+	}
+	for _, d := range data {
+		withParser(d.str, func(p *Parser) {
+			res := p.classDeclaration()
+			if resStr, expStr := PrettyPrint(res), PrettyPrint(d.expect); resStr != expStr {
+				t.Errorf("Expecting \n%s \n----but got----\n%s", expStr, resStr)
+			}
+		})
+	}
+}
+
+func TestParser_class_panic(t *testing.T) {
+	data := []string{
+		//duplicate property
+		`class Something{ int a; int a;}`,
+		`class Something{ int a; String a;}`,
+
+		// member already defined as other thing
+		`class Something{ int a; int a(){} }`,
+
+		// duplicate method signature
+		`class Something{
+			String Speak(){}
+			String Speak(){return 1;}
+		}`,
+
+		// method overloading, different type
+		`class Something{
+			String Speak(){}
+			int Speak(){}
+		}`,
+
+		`class Something{
+			String Speak(){}
+			int Speak(int i){}
+		}`,
+
+		// method without return type
+		`class Something{
+			Nice(int a){}
+		}`,
+
+		// constructor overloading
+		`class Something{
+			Something(int a){}
+			Something(int b){}
+		}`,
+
+		// main already defined
+		`class Something{
+			public static void main(String[] args){}
+			public static void main(String[] a){}
+		}`,
+	}
+
+	for _, str := range data {
+		withParser(str, func(p *Parser) {
+			defer assertPanic(t, fmt.Sprintf("Should panic on \n%s", str))
+			p.classDeclaration()
+		})
+	}
+}
+
+func TestParser_declaration(t *testing.T) {
 	data := []struct {
 		str    string
 		expect Declaration
@@ -60,8 +276,8 @@ func TestParser_declarationList(t *testing.T) {
 		{
 			`void foo(){}`,
 			&MethodDeclaration{Public,
-				"foo",
 				NamedType{"void", false},
+				"foo",
 				[]Parameter{},
 				StatementList{},
 			},
@@ -69,8 +285,8 @@ func TestParser_declarationList(t *testing.T) {
 		{
 			`private void foo(){}`,
 			&MethodDeclaration{Private,
-				"foo",
 				NamedType{"void", false},
+				"foo",
 				[]Parameter{},
 				StatementList{},
 			},
@@ -78,8 +294,8 @@ func TestParser_declarationList(t *testing.T) {
 		{
 			`private int foo(int a){}`,
 			&MethodDeclaration{Private,
-				"foo",
 				NamedType{"int", false},
+				"foo",
 				[]Parameter{
 					{NamedType{"int", false}, "a"},
 				},
@@ -91,8 +307,8 @@ func TestParser_declarationList(t *testing.T) {
 return 1;
 }`,
 			&MethodDeclaration{Private,
-				"foo",
 				NamedType{"String", false},
+				"foo",
 				[]Parameter{
 					{NamedType{"int", false}, "a"},
 					{NamedType{"String", true}, "list"},
@@ -106,9 +322,9 @@ return 1;
 			`public static void main(String[] args){
 return;
 }`,
-			&MainMethod{MethodDeclaration{Public,
-				"main",
+			&MainMethodDeclaration{MethodDeclaration{Public,
 				NamedType{"void", false},
+				"main",
 				[]Parameter{
 					{NamedType{"String", true}, "args"},
 				},

@@ -569,12 +569,12 @@ type VariableDeclaration struct {
 }
 
 func (v *VariableDeclaration) NodeContent() (string, string) {
-	format := ":type %s"
+	format := "%s :type %s"
 	if v.Type.IsArray {
 		format += "[]"
 	}
 
-	return "var-declaration", fmt.Sprintf(format, v.Type.Name)
+	return "var-declaration", fmt.Sprintf(format, v.Name, v.Type.Name)
 }
 
 func (v *VariableDeclaration) ChildNode() INode {
@@ -626,8 +626,28 @@ func (f *ForStatement) IsStatement() bool {
 	return true
 }
 
+type DeclarationType int
+
+const (
+	Method DeclarationType = iota
+	Property
+	Constructor
+	MainMethod
+)
+
+func (d DeclarationType) String() string {
+	return []string{
+		"Method",
+		"Property",
+		"Constructor",
+		"MainMethod",
+	}[d]
+}
+
 type Declaration interface {
 	INode
+	GetName() string
+	GetType() DeclarationType
 	GetAccessModifier() AccessModifier
 }
 
@@ -656,8 +676,17 @@ func (p *PropertyDeclaration) NodeContent() (string, string) {
 	_, content := p.VariableDeclaration.NodeContent()
 	return "property-decl", content
 }
+
 func (p *PropertyDeclaration) GetAccessModifier() AccessModifier {
 	return p.AccessModifier
+}
+
+func (p *PropertyDeclaration) GetName() string {
+	return p.VariableDeclaration.Name
+}
+
+func (p *PropertyDeclaration) GetType() DeclarationType {
+	return Property
 }
 
 type Parameter struct {
@@ -667,13 +696,21 @@ type Parameter struct {
 
 type MethodDeclaration struct {
 	AccessModifier
-	Name          string
 	ReturnType    NamedType
+	Name          string
 	ParameterList []Parameter
 	Body          StatementList
 }
 
-func (m *MethodDeclaration) Signature() []string {
+func (m *MethodDeclaration) Signature() string {
+	return fmt.Sprintf("<%s> %s (%s)",
+		m.ReturnType.String(),
+		m.Name,
+		strings.Join(m.ParamSignature(), ", "),
+	)
+}
+
+func (m *MethodDeclaration) ParamSignature() []string {
 	str := make([]string, len(m.ParameterList))
 	for i, param := range m.ParameterList {
 		str[i] = param.Type.String()
@@ -683,7 +720,7 @@ func (m *MethodDeclaration) Signature() []string {
 func (m *MethodDeclaration) NodeContent() (string, string) {
 	format := "%s %s :type %s :param ["
 	if len(m.ParameterList) > 0 {
-		format += strings.Join(m.Signature(), ", ")
+		format += strings.Join(m.ParamSignature(), ", ")
 	}
 
 	format += "]"
@@ -703,14 +740,22 @@ func (m *MethodDeclaration) GetAccessModifier() AccessModifier {
 	return m.AccessModifier
 }
 
-type MainMethod struct {
+func (m *MethodDeclaration) GetName() string {
+	return m.Name
+}
+
+func (m *MethodDeclaration) GetType() DeclarationType {
+	return Method
+}
+
+type MainMethodDeclaration struct {
 	MethodDeclaration
 }
 
-func (m *MainMethod) NodeContent() (string, string) {
+func (m *MainMethodDeclaration) NodeContent() (string, string) {
 	format := "%s %s :type %s :param ["
 	if len(m.ParameterList) > 0 {
-		format += strings.Join(m.Signature(), ", ")
+		format += strings.Join(m.ParamSignature(), ", ")
 	}
 
 	format += "]"
@@ -721,16 +766,190 @@ func (m *MainMethod) NodeContent() (string, string) {
 	)
 }
 
-type Constructor struct {
+func (m *MainMethodDeclaration) GetType() DeclarationType {
+	return MainMethod
+}
+
+type ConstructorDeclaration struct {
 	MethodDeclaration
 }
 
-func NewConstructor(acc AccessModifier, name string, param []Parameter, body StatementList) *Constructor {
-	return &Constructor{MethodDeclaration{
+func NewConstructor(acc AccessModifier, name string, param []Parameter, body StatementList) *ConstructorDeclaration {
+	return &ConstructorDeclaration{MethodDeclaration{
 		acc,
-		name,
 		NamedType{"<this>", false},
+		name,
 		param,
 		body,
 	}}
+}
+func (c *ConstructorDeclaration) NodeContent() (string, string) {
+	_, content := c.MethodDeclaration.NodeContent()
+	return "constructor", content
+}
+
+func (c *ConstructorDeclaration) GetType() DeclarationType {
+	return Constructor
+}
+
+type Interface struct {
+	Name string
+}
+
+type Class struct {
+	Name        string
+	Extend      *Class
+	Implement   *Interface
+	Members     map[string]DeclarationType
+	MainMethod  *MainMethodDeclaration
+	Properties  map[string]*PropertyDeclaration
+	Methods     map[string]map[string]*MethodDeclaration
+	Constructor map[string]*ConstructorDeclaration
+}
+
+func NewEmptyClass(name string, extend *Class, implementing *Interface) *Class {
+	return &Class{
+		name,
+		extend,
+		implementing,
+		make(map[string]DeclarationType),
+		nil,
+		make(map[string]*PropertyDeclaration),
+		make(map[string]map[string]*MethodDeclaration),
+		make(map[string]*ConstructorDeclaration),
+	}
+}
+
+func (c *Class) propertiesString() []string {
+	propStr := make([]string, len(c.Properties))
+	i := 0
+	for _, prop := range c.Properties {
+		propStr[i] = PrettyPrint(prop)
+		i += 1
+	}
+	return propStr
+}
+
+func (c *Class) methodsString() []string {
+	methodStr := make([]string, 0)
+	for _, methodNameMap := range c.Methods {
+		for _, method := range methodNameMap {
+			methodStr = append(methodStr, PrettyPrint(method))
+		}
+	}
+	return methodStr
+}
+
+func (c *Class) constructorString() []string {
+	conStr := make([]string, len(c.Constructor))
+	i := 0
+	for _, con := range c.Constructor {
+		conStr[i] = PrettyPrint(con)
+		i += 1
+	}
+	return conStr
+}
+
+func (c *Class) NodeContent() (string, string) {
+	format := "%s"
+	args := []interface{}{c.Name}
+
+	if c.Extend != nil {
+		format += " :extend %s"
+		args = append(args, c.Extend.Name)
+	} else if c.Implement != nil {
+		format += " :implement %s"
+		args = append(args, c.Implement.Name)
+	}
+
+	format += "\n\t:props [%s] \n\t:methods [%s] \n\t:constructor [%s]"
+	args = append(args, strings.Join(c.propertiesString(), ", "))
+	args = append(args, strings.Join(c.methodsString(), ", "))
+	args = append(args, strings.Join(c.constructorString(), ", "))
+
+	if c.MainMethod != nil {
+		format += "\n\t:main %s"
+		args = append(args, PrettyPrint(c.MainMethod))
+	}
+
+	return "class", fmt.Sprintf(format, args...)
+}
+
+func (c *Class) ChildNode() INode {
+	return nil
+}
+
+func (c *Class) addProperty(decl Declaration) {
+	prop := decl.(*PropertyDeclaration)
+	if _, ok := c.Properties[prop.Name]; ok {
+		panic(fmt.Sprintf("Property %s is already exist.", prop.Name))
+	}
+	c.Properties[prop.Name] = prop
+}
+
+func (c *Class) addConstructor(decl Declaration) {
+	con := decl.(*ConstructorDeclaration)
+	if c.Name != con.Name {
+		panic("Method should have a return type.")
+	}
+
+	if _, ok := c.Constructor[con.Signature()]; ok {
+		panic("Consturctor with the same signature already exist.")
+	}
+	c.Constructor[con.Signature()] = con
+}
+
+func (c *Class) addMethod(decl Declaration) {
+	method := decl.(*MethodDeclaration)
+	if c.Methods[method.Name] == nil {
+		c.Methods[method.Name] = make(map[string]*MethodDeclaration)
+	}
+
+	if len(c.Methods[method.Name]) > 0 {
+		var key string
+		for k := range c.Methods[method.Name] {
+			key = k
+			break
+		}
+
+		// check if registered method has the same return type
+		// or the same parameter signature as about to be added method
+		sameMethodName := c.Methods[method.Name][key]
+		if sameMethodName.ReturnType != method.ReturnType {
+			panic(fmt.Sprintf("Invalid method overloading.\n Method '%s' already exist with the return type of '%s'",
+				method.Name,
+				sameMethodName.ReturnType.String(),
+			))
+		}
+
+		if sameMethodName.Signature() == method.Signature() {
+			panic("Method with the same signature are alerady exist.")
+		}
+	}
+
+	c.Methods[method.Name][method.Signature()] = method
+}
+
+func (c *Class) AddDeclaration(decl Declaration) {
+	if val, ok := c.Members[decl.GetName()]; ok && val != decl.GetType() {
+		panic(fmt.Sprintf("Error: %s is already defined as %s",
+			decl.GetName(),
+			val,
+		))
+	}
+
+	switch decl.GetType() {
+	case Property:
+		c.addProperty(decl)
+	case Method:
+		c.addMethod(decl)
+	case Constructor:
+		c.addConstructor(decl)
+	case MainMethod:
+		if c.MainMethod != nil {
+			panic("Main method is already defined.")
+		}
+		c.MainMethod = decl.(*MainMethodDeclaration)
+	}
+	c.Members[decl.GetName()] = decl.GetType()
 }
