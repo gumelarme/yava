@@ -12,6 +12,21 @@ func withParser(s string, parserAction func(p *Parser)) {
 	})
 }
 
+func TestParser_program(t *testing.T) {
+	helloClass := NewEmptyClass("Hello", nil, nil)
+	greetInterface := &Interface{"Greet", nil}
+	expect := Program{
+		"Hello": helloClass,
+		"Greet": greetInterface,
+	}
+	str := `class Hello {} interface Greet {}`
+	withParser(str, func(p *Parser) {
+		program := p.Compile()
+		if !expect.Equal(*program) {
+			t.Errorf("Program is not equal %d, %d", len(*program), len(expect))
+		}
+	})
+}
 func TestParser_interface(t *testing.T) {
 	method1 := MethodSignature{Public, NamedType{"int", false}, "Count", []Parameter{}}
 	method2 := MethodSignature{Public, NamedType{"String", false}, "Quack", []Parameter{}}
@@ -70,6 +85,33 @@ func TestParser_interface_panic(t *testing.T) {
 		})
 	}
 
+}
+
+func TestParser_classExtends(t *testing.T) {
+	classA := NewEmptyClass("A", nil, nil)
+	classB := NewEmptyClass("B", classA, nil)
+	program1 := Program{"A": classA, "B": classB}
+
+	interfaceA := Interface{"A", nil}
+	classC := NewEmptyClass("C", nil, &interfaceA)
+	program2 := Program{"A": &interfaceA, "C": classC}
+
+	classBStr := `class A {} class B extends A {}`
+	classCStr := `interface A {} class C implements A {}`
+
+	withParser(classBStr, func(p *Parser) {
+		program := p.Compile()
+		if b, c := PrettyPrint(&program1), PrettyPrint(program); b != c {
+			t.Errorf("Expecting \n%s \n----got----\n %s", b, c)
+		}
+	})
+
+	withParser(classCStr, func(p *Parser) {
+		program := p.Compile()
+		if b, c := PrettyPrint(&program2), PrettyPrint(program); b != c {
+			t.Errorf("Expecting %s got %s", b, c)
+		}
+	})
 }
 
 func TestParser_class(t *testing.T) {

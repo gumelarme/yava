@@ -2,12 +2,15 @@ package text
 
 import (
 	"fmt"
+	"io"
 )
 
 // Parser represent a parser engine
 type Parser struct {
 	lexer    *Lexer
 	curToken *Token
+	EOF      bool
+	program  Program
 }
 
 func KeywordEqualTo(token Token, str string) bool {
@@ -20,6 +23,8 @@ func NewParser(lexer *Lexer) Parser {
 	return Parser{
 		lexer,
 		&tok,
+		false,
+		make(Program),
 	}
 }
 
@@ -38,8 +43,12 @@ func (p *Parser) match(token TokenType) string {
 		panic(msg)
 	}
 
-	tok, _ := p.lexer.NextToken()
+	tok, err := p.lexer.NextToken()
+	if err == io.EOF {
+		p.EOF = true
+	}
 	p.curToken = &tok
+
 	return value
 }
 
@@ -49,13 +58,24 @@ var accessModMap = map[string]AccessModifier{
 	"private":   Private,
 }
 
-func (p *Parser) program() {
-	if p.curToken.Type != Keyword {
-		panic("Expecting class or interface declaration")
-	}
+func (p *Parser) Compile() *Program {
+	for !p.EOF {
+		if p.curToken.Type != Keyword {
+			panic(fmt.Sprintf(
+				"Expecting class or interface declaration but got %s",
+				p.curToken,
+			))
+		}
 
-	if p.curToken.Value() == "class" {
+		var t Template
+		if p.curToken.Value() == "class" {
+			t = p.classDeclaration()
+		} else {
+			t = p.interfaceDeclaration()
+		}
+		p.program.AddTemplate(t)
 	}
+	return &p.program
 }
 
 func (p *Parser) interfaceDeclaration() *Interface {
@@ -70,6 +90,7 @@ func (p *Parser) interfaceDeclaration() *Interface {
 	p.match(RightCurlyBracket)
 	return &i
 }
+
 func (p *Parser) methodSignature() *MethodSignature {
 	var method MethodSignature
 	method.AccessModifier = p.accessModifier()
@@ -83,6 +104,12 @@ func (p *Parser) methodSignature() *MethodSignature {
 func (p *Parser) classDeclaration() *Class {
 	p.match(Keyword)
 	class := NewEmptyClass(p.match(Id), nil, nil)
+	if key := p.curToken.Value(); p.curToken.Type == Keyword &&
+		key == "extends" ||
+		key == "implements" {
+		p.classExtends(class)
+	}
+
 	p.match(LeftCurlyBracket)
 	for p.curToken.Type != RightCurlyBracket {
 		decl := p.declaration()
@@ -91,6 +118,26 @@ func (p *Parser) classDeclaration() *Class {
 	p.match(RightCurlyBracket)
 
 	return class
+}
+
+func (p *Parser) classExtends(class *Class) {
+	key := p.match(Keyword)
+	name := p.match(Id)
+	val, ok := p.program[name]
+
+	if !ok {
+		msg := "Unable to %s %s because %s is undefined"
+		panic(fmt.Sprintf(msg, key, name, name))
+	}
+
+	if key == "extends" {
+		class.Extend = val.(*Class)
+	} else if key == "implements" {
+		class.Implement = val.(*Interface)
+	} else {
+		panic("Expect `extends` or `implements` keyword.")
+	}
+
 }
 
 func (p *Parser) declaration() (decl Declaration) {

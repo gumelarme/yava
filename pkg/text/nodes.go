@@ -626,6 +626,8 @@ func (f *ForStatement) IsStatement() bool {
 	return true
 }
 
+// ----------------- END OF STATEMENTS
+
 type DeclarationType int
 
 const (
@@ -647,7 +649,8 @@ func (d DeclarationType) String() string {
 type Declaration interface {
 	INode
 	GetName() string
-	GetType() DeclarationType
+	DeclType() DeclarationType
+	TypeOf() NamedType
 	GetAccessModifier() AccessModifier
 }
 
@@ -685,8 +688,12 @@ func (p *PropertyDeclaration) GetName() string {
 	return p.VariableDeclaration.Name
 }
 
-func (p *PropertyDeclaration) GetType() DeclarationType {
+func (p *PropertyDeclaration) DeclType() DeclarationType {
 	return Property
+}
+
+func (p *PropertyDeclaration) TypeOf() NamedType {
+	return p.VariableDeclaration.Type
 }
 
 type Parameter struct {
@@ -699,6 +706,23 @@ type MethodSignature struct {
 	ReturnType    NamedType
 	Name          string
 	ParameterList []Parameter
+}
+
+func (m *MethodSignature) Equal(val MethodSignature) bool {
+	result := m.Name == val.Name &&
+		m.AccessModifier == val.AccessModifier &&
+		m.ReturnType == val.ReturnType
+
+	if !result {
+		return false
+	}
+
+	for i, sign := range m.ParameterList {
+		if sign != val.ParameterList[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *MethodSignature) GetName() string {
@@ -771,8 +795,12 @@ func (m *MethodDeclaration) ChildNode() INode {
 	return m.Body
 }
 
-func (m *MethodDeclaration) GetType() DeclarationType {
+func (m *MethodDeclaration) DeclType() DeclarationType {
 	return Method
+}
+
+func (m *MethodDeclaration) TypeOf() NamedType {
+	return m.ReturnType
 }
 
 type MainMethodDeclaration struct {
@@ -793,7 +821,7 @@ func (m *MainMethodDeclaration) NodeContent() (string, string) {
 	)
 }
 
-func (m *MainMethodDeclaration) GetType() DeclarationType {
+func (m *MainMethodDeclaration) DeclType() DeclarationType {
 	return MainMethod
 }
 
@@ -819,8 +847,20 @@ func (c *ConstructorDeclaration) NodeContent() (string, string) {
 	return "constructor", content
 }
 
-func (c *ConstructorDeclaration) GetType() DeclarationType {
+func (c *ConstructorDeclaration) DeclType() DeclarationType {
 	return Constructor
+}
+
+func (c *ConstructorDeclaration) TypeOf() NamedType {
+	return NamedType{c.Name, false}
+}
+
+// ----------------- END OF DECLARATIONS
+
+type Template interface {
+	INode
+	Describe() (typeof string, name string)
+	Members() map[string]Declaration
 }
 
 type Interface struct {
@@ -833,6 +873,10 @@ func NewInterface(name string) *Interface {
 		name,
 		make(map[string]*MethodSignature),
 	}
+}
+
+func (i *Interface) Describe() (string, string) {
+	return "interface", i.Name
 }
 
 func (i *Interface) AddMethod(method *MethodSignature) {
@@ -865,11 +909,20 @@ func (i *Interface) ChildNode() INode {
 	return nil
 }
 
+func (i *Interface) Members() map[string]Declaration {
+	members := make(map[string]Declaration, len(i.Methods))
+
+	for k, v := range i.Methods {
+		members[k] = &MethodDeclaration{*v, nil}
+	}
+	return members
+}
+
 type Class struct {
 	Name        string
 	Extend      *Class
 	Implement   *Interface
-	Members     map[string]DeclarationType
+	members     map[string]DeclarationType
 	MainMethod  *MainMethodDeclaration
 	Properties  map[string]*PropertyDeclaration
 	Methods     map[string]map[string]*MethodDeclaration
@@ -887,6 +940,10 @@ func NewEmptyClass(name string, extend *Class, implementing *Interface) *Class {
 		make(map[string]map[string]*MethodDeclaration),
 		make(map[string]*ConstructorDeclaration),
 	}
+}
+
+func (c *Class) Describe() (string, string) {
+	return "class", c.Name
 }
 
 func (c *Class) propertiesString() []string {
@@ -999,15 +1056,31 @@ func (c *Class) addMethod(decl Declaration) {
 	c.Methods[method.Name][method.Signature()] = method
 }
 
+func (c *Class) isNameTaken(decl Declaration) (bool, string) {
+	for key := range c.Properties {
+		if key == decl.GetName() {
+			return true, "property"
+		}
+	}
+
+	for key := range c.Methods {
+		if key == decl.GetName() && decl.DeclType() == Property {
+			return true, "methods"
+		}
+	}
+
+	return false, ""
+}
+
 func (c *Class) AddDeclaration(decl Declaration) {
-	if val, ok := c.Members[decl.GetName()]; ok && val != decl.GetType() {
+	if taken, as := c.isNameTaken(decl); taken {
 		panic(fmt.Sprintf("Error: %s is already defined as %s",
 			decl.GetName(),
-			val,
+			as,
 		))
 	}
 
-	switch decl.GetType() {
+	switch decl.DeclType() {
 	case Property:
 		c.addProperty(decl)
 	case Method:
@@ -1020,5 +1093,86 @@ func (c *Class) AddDeclaration(decl Declaration) {
 		}
 		c.MainMethod = decl.(*MainMethodDeclaration)
 	}
-	c.Members[decl.GetName()] = decl.GetType()
+}
+
+func (c *Class) getFirstMethodOfName(name string) *MethodDeclaration {
+	methods, found := c.Methods[name]
+	if !found {
+		panic("Methods not found")
+	}
+
+	var sign *MethodDeclaration
+	for _, m := range methods {
+		sign = m
+		break
+	}
+
+	return sign
+}
+
+func (c *Class) Members() map[string]Declaration {
+	members := make(map[string]Declaration, len(c.members))
+
+	if c.MainMethod != nil {
+		members["main"] = c.MainMethod
+	}
+
+	for _, prop := range c.Properties {
+		members[prop.GetName()] = prop
+	}
+
+	for name := range c.Methods {
+		members[name] = c.getFirstMethodOfName(name)
+	}
+
+	return members
+}
+
+type Program map[string]Template
+
+func (p Program) Equal(val Program) bool {
+	if len(p) != len(val) {
+		return false
+	}
+
+	for key, template := range p {
+		member, ok := val[key]
+		if !ok {
+			return false
+		}
+
+		if PrettyPrint(member) != PrettyPrint(template) {
+			return false
+		}
+	}
+	return true
+}
+
+func (p *Program) AddTemplate(template Template) {
+	if len(*p) == 0 {
+		fmt.Println("Always empty")
+		*p = make(map[string]Template)
+	}
+
+	ty, name := template.Describe()
+	if _, taken := (*p)[name]; taken {
+		panic(fmt.Sprintf("'%s' is already defined as %s", name, ty))
+	}
+
+	(*p)[name] = template
+}
+
+func (p *Program) ChildNode() INode {
+	return nil
+}
+
+func (p *Program) NodeContent() (string, string) {
+	str := make([]string, len(*p))
+	i := 0
+	for _, v := range *p {
+		str[i] = PrettyPrint(v)
+		i += 1
+	}
+
+	return "program", fmt.Sprintf(":declarations [\n\t%s]", strings.Join(str, ",\n\t"))
 }

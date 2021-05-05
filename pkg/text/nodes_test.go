@@ -231,3 +231,69 @@ func TestIfStatement_PrettyPrint(t *testing.T) {
 		}
 	}
 }
+
+func TestClass_Members(t *testing.T) {
+	class := NewEmptyClass("Person", nil, nil)
+	prop := &PropertyDeclaration{
+		Public,
+		VariableDeclaration{
+			NamedType{"int", false},
+			"age",
+			nil,
+		},
+	}
+
+	method := &MethodDeclaration{
+		MethodSignature{
+			Public,
+			NamedType{"int", false},
+			"getAge",
+			[]Parameter{},
+		},
+		nil,
+	}
+
+	class.addProperty(prop)
+	class.addMethod(method)
+
+	class.addMethod(&MethodDeclaration{
+		MethodSignature{
+			Public,
+			NamedType{"int", false},
+			"getAge",
+			[]Parameter{
+				{NamedType{"int", false}, "a"},
+			},
+		},
+		nil,
+	})
+
+	expect := map[string]Declaration{
+		"age":    prop,
+		"getAge": method,
+	}
+
+	members := class.Members()
+
+	if lex, lem := len(expect), len(members); lex != lem {
+		t.Errorf("Number of member does not match, expect %d got %d", lex, lem)
+	}
+
+	for k, ex := range expect {
+		mem, ok := members[k]
+		if !ok {
+			t.Errorf("Members `%s` not found", k)
+			return
+		}
+
+		if mem.GetName() != ex.GetName() ||
+			mem.GetAccessModifier() != ex.GetAccessModifier() ||
+			mem.DeclType() != ex.DeclType() ||
+			mem.TypeOf() != ex.TypeOf() {
+
+			t.Errorf("Members are not equal")
+
+		}
+
+	}
+}
