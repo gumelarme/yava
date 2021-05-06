@@ -1,7 +1,6 @@
 package text
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -964,7 +963,7 @@ func (c *Class) propertiesString() []string {
 	keys := make([]string, len(c.Properties))
 
 	i := 0
-	for key, _ := range c.Properties {
+	for key := range c.Properties {
 		keys[i] = key
 		i += 1
 	}
@@ -1006,13 +1005,13 @@ func (c *Class) checkInterfaceImplementations() error {
 
 	interfaceSignatures := c.Implement.Methods
 	for _, sign := range interfaceSignatures {
-		methods, _ := c.Methods[sign.Name]
+		methods := c.Methods[sign.Name]
 		if methods == nil {
-			return errors.New(fmt.Sprintf("Class must implments method of name %s", sign.Name))
+			return fmt.Errorf("Class must implments method of name %s", sign.Name)
 		}
 
 		if _, ok := methods[sign.Signature()]; !ok {
-			return errors.New(fmt.Sprintf("Class must implements %s", sign.Signature()))
+			return fmt.Errorf("Class must implements %s", sign.Signature())
 		}
 	}
 	return nil
