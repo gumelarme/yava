@@ -22,8 +22,8 @@ func TestParser_program(t *testing.T) {
 	str := `class Hello {} interface Greet {}`
 	withParser(str, func(p *Parser) {
 		program := p.Compile()
-		if !expect.Equal(*program) {
-			t.Errorf("Program is not equal %d, %d", len(*program), len(expect))
+		if !expect.Equal(program) {
+			t.Errorf("Program is not equal %d, %d", len(program), len(expect))
 		}
 	})
 }

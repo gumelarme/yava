@@ -1203,23 +1203,23 @@ func (p *Program) AddTemplate(template Template) {
 	(*p)[name] = template
 }
 
-func (p *Program) ChildNode() INode {
+func (p Program) ChildNode() INode {
 	return nil
 }
 
-func (p *Program) NodeContent() (string, string) {
-	str := make([]string, len(*p))
-	keys := make([]string, len(*p))
+func (p Program) NodeContent() (string, string) {
+	str := make([]string, len(p))
+	keys := make([]string, len(p))
 
 	i := 0
-	for key := range *p {
+	for key := range p {
 		keys[i] = key
 		i += 1
 	}
 
 	sort.Strings(keys)
 	for j, key := range keys {
-		str[j] = PrettyPrint((*p)[key])
+		str[j] = PrettyPrint(p[key])
 	}
 
 	return "program", fmt.Sprintf(":declarations [\n\t%s]", strings.Join(str, ",\n\t"))

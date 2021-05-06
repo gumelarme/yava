@@ -58,7 +58,7 @@ var accessModMap = map[string]AccessModifier{
 	"private":   Private,
 }
 
-func (p *Parser) Compile() *Program {
+func (p *Parser) Compile() Program {
 	for !p.EOF {
 		if p.curToken.Type != Keyword {
 			panic(fmt.Sprintf(
@@ -75,7 +75,7 @@ func (p *Parser) Compile() *Program {
 		}
 		p.program.AddTemplate(t)
 	}
-	return &p.program
+	return p.program
 }
 
 func (p *Parser) interfaceDeclaration() *Interface {
