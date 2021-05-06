@@ -232,6 +232,42 @@ func TestIfStatement_PrettyPrint(t *testing.T) {
 	}
 }
 
+//TODO: Do more equality test
+func TestMethodSignature_Equal(t *testing.T) {
+	m1 := MethodSignature{Public, NamedType{"void", false}, "Hello", []Parameter{}}
+	m2 := MethodSignature{Public, NamedType{"void", false}, "Hello", []Parameter{}}
+
+	if !m2.Equal(m1) {
+		t.Errorf("Method signature should be equal")
+	}
+
+	m3 := MethodSignature{Public, NamedType{"int", true}, "getAge", []Parameter{}}
+	m4 := MethodSignature{Public, NamedType{"int", true}, "getAge", []Parameter{{NamedType{"int", false}, "a"}}}
+
+	if m3.Equal(m4) {
+		t.Errorf("Method signature with different parameter count should be unequal")
+	}
+
+	m5 := MethodSignature{Public, NamedType{"int", true}, "getName", []Parameter{}}
+	m6 := MethodSignature{Public, NamedType{"int", true}, "getAge", []Parameter{}}
+
+	if m5.Equal(m6) {
+		t.Errorf("Method signature with different name should be unequal")
+	}
+
+	m7 := MethodSignature{Public, NamedType{"int", true}, "getAge", []Parameter{
+		{NamedType{"int", false}, "a"},
+	}}
+
+	m8 := MethodSignature{Public, NamedType{"int", true}, "getAge", []Parameter{
+		{NamedType{"char", false}, "a"},
+	}}
+
+	if m7.Equal(m8) {
+		t.Errorf("Method signature with different parameter list should be unequal")
+	}
+}
+
 func TestClass_Members(t *testing.T) {
 	class := NewEmptyClass("Person", nil, nil)
 	prop := &PropertyDeclaration{
@@ -295,5 +331,47 @@ func TestClass_Members(t *testing.T) {
 
 		}
 
+	}
+}
+
+func TestClass_checkInterfaceImplementations(t *testing.T) {
+	interfaceA := NewInterface("A")
+	class1 := NewEmptyClass("Person", nil, nil)
+
+	if err := class1.checkInterfaceImplementations(); err != nil {
+		t.Error("Should return nil if class does not implement any interface.")
+	}
+
+	sign1 := MethodSignature{Public, NamedType{"int", false}, "getA", []Parameter{}}
+	interfaceA.AddMethod(&sign1)
+
+	class1.Implement = interfaceA
+	class1.addMethod(&MethodDeclaration{sign1, StatementList{}})
+
+	if err := class1.checkInterfaceImplementations(); err != nil {
+		t.Errorf("Methods are implemented but got error of %s", err)
+	}
+
+	sign2 := MethodSignature{Public, NamedType{"int", true}, "getB", []Parameter{}}
+	interfaceA.AddMethod(&sign2)
+
+	if err := class1.checkInterfaceImplementations(); err == nil {
+		t.Errorf("Methods are NOT implemented but got no errors")
+	}
+
+	class1.addMethod(&MethodDeclaration{
+		MethodSignature{
+			Public,
+			NamedType{"int", true},
+			"getB",
+			[]Parameter{
+				{NamedType{"int", false}, "b"},
+			},
+		},
+		StatementList{},
+	})
+
+	if err := class1.checkInterfaceImplementations(); err == nil {
+		t.Errorf("Same method name with different parameter should return error.")
 	}
 }

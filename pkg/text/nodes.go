@@ -1,8 +1,10 @@
 package text
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -717,6 +719,10 @@ func (m *MethodSignature) Equal(val MethodSignature) bool {
 		return false
 	}
 
+	if len(m.ParameterList) != len(val.ParameterList) {
+		return false
+	}
+
 	for i, sign := range m.ParameterList {
 		if sign != val.ParameterList[i] {
 			return false
@@ -893,11 +899,18 @@ func (i *Interface) AddMethod(method *MethodSignature) {
 
 func (i *Interface) NodeContent() (string, string) {
 	methods := make([]string, len(i.Methods))
+	keys := make([]string, len(i.Methods))
 	j := 0
-	for _, m := range i.Methods {
-		methods[j] = PrettyPrint(m)
+	for key := range i.Methods {
+		keys[j] = key
 		j += 1
 	}
+
+	sort.Strings(keys)
+	for j, key := range keys {
+		methods[j] = PrettyPrint(i.Methods[key])
+	}
+
 	return "interface",
 		fmt.Sprintf("%s \n\t:methods [%s]",
 			i.Name,
@@ -948,11 +961,19 @@ func (c *Class) Describe() (string, string) {
 
 func (c *Class) propertiesString() []string {
 	propStr := make([]string, len(c.Properties))
+	keys := make([]string, len(c.Properties))
+
 	i := 0
-	for _, prop := range c.Properties {
-		propStr[i] = PrettyPrint(prop)
+	for key, _ := range c.Properties {
+		keys[i] = key
 		i += 1
 	}
+	// this guarantee the order of occurence in PrettyPrint to be the same
+	sort.Strings(keys)
+	for i, key := range keys {
+		propStr[i] = PrettyPrint(c.Properties[key])
+	}
+
 	return propStr
 }
 
@@ -963,6 +984,7 @@ func (c *Class) methodsString() []string {
 			methodStr = append(methodStr, PrettyPrint(method))
 		}
 	}
+	sort.Strings(methodStr)
 	return methodStr
 }
 
@@ -973,7 +995,27 @@ func (c *Class) constructorString() []string {
 		conStr[i] = PrettyPrint(con)
 		i += 1
 	}
+	sort.Strings(conStr)
 	return conStr
+}
+
+func (c *Class) checkInterfaceImplementations() error {
+	if c.Implement == nil {
+		return nil
+	}
+
+	interfaceSignatures := c.Implement.Methods
+	for _, sign := range interfaceSignatures {
+		methods, _ := c.Methods[sign.Name]
+		if methods == nil {
+			return errors.New(fmt.Sprintf("Class must implments method of name %s", sign.Name))
+		}
+
+		if _, ok := methods[sign.Signature()]; !ok {
+			return errors.New(fmt.Sprintf("Class must implements %s", sign.Signature()))
+		}
+	}
+	return nil
 }
 
 func (c *Class) NodeContent() (string, string) {
@@ -1048,8 +1090,9 @@ func (c *Class) addMethod(decl Declaration) {
 			))
 		}
 
-		if sameMethodName.Signature() == method.Signature() {
-			panic("Method with the same signature are alerady exist.")
+		if sameMethodName.MethodSignature.Equal(method.MethodSignature) {
+			msg := fmt.Sprintf("Method with the same signature are alerady exist.\n%s == %s", method.MethodSignature.Signature(), sameMethodName.Signature())
+			panic(msg)
 		}
 	}
 
@@ -1150,7 +1193,6 @@ func (p Program) Equal(val Program) bool {
 
 func (p *Program) AddTemplate(template Template) {
 	if len(*p) == 0 {
-		fmt.Println("Always empty")
 		*p = make(map[string]Template)
 	}
 
@@ -1168,10 +1210,17 @@ func (p *Program) ChildNode() INode {
 
 func (p *Program) NodeContent() (string, string) {
 	str := make([]string, len(*p))
+	keys := make([]string, len(*p))
+
 	i := 0
-	for _, v := range *p {
-		str[i] = PrettyPrint(v)
+	for key := range *p {
+		keys[i] = key
 		i += 1
+	}
+
+	sort.Strings(keys)
+	for j, key := range keys {
+		str[j] = PrettyPrint((*p)[key])
 	}
 
 	return "program", fmt.Sprintf(":declarations [\n\t%s]", strings.Join(str, ",\n\t"))
