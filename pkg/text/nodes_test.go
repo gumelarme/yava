@@ -291,8 +291,7 @@ func TestClass_Members(t *testing.T) {
 
 	class.addProperty(prop)
 	class.addMethod(method)
-
-	class.addMethod(&MethodDeclaration{
+	method2 := &MethodDeclaration{
 		MethodSignature{
 			Public,
 			NamedType{"int", false},
@@ -302,26 +301,18 @@ func TestClass_Members(t *testing.T) {
 			},
 		},
 		nil,
-	})
-
-	expect := map[string]Declaration{
-		"age":    prop,
-		"getAge": method,
 	}
+	class.addMethod(method2)
 
+	expect := []Declaration{prop, method, method2}
 	members := class.Members()
 
 	if lex, lem := len(expect), len(members); lex != lem {
 		t.Errorf("Number of member does not match, expect %d got %d", lex, lem)
 	}
 
-	for k, ex := range expect {
-		mem, ok := members[k]
-		if !ok {
-			t.Errorf("Members `%s` not found", k)
-			return
-		}
-
+	for i, ex := range expect {
+		mem := members[i]
 		if mem.GetName() != ex.GetName() ||
 			mem.GetAccessModifier() != ex.GetAccessModifier() ||
 			mem.DeclType() != ex.DeclType() ||
@@ -334,44 +325,45 @@ func TestClass_Members(t *testing.T) {
 	}
 }
 
-func TestClass_checkInterfaceImplementations(t *testing.T) {
-	interfaceA := NewInterface("A")
-	class1 := NewEmptyClass("Person", nil, nil)
+//TODO: Move checking to node_visitor
+// func TestClass_checkInterfaceImplementations(t *testing.T) {
+// 	interfaceA := NewInterface("A")
+// 	class1 := NewEmptyClass("Person", nil, nil)
 
-	if err := class1.checkInterfaceImplementations(); err != nil {
-		t.Error("Should return nil if class does not implement any interface.")
-	}
+// 	if err := class1.checkInterfaceImplementations(); err != nil {
+// 		t.Error("Should return nil if class does not implement any interface.")
+// 	}
 
-	sign1 := MethodSignature{Public, NamedType{"int", false}, "getA", []Parameter{}}
-	interfaceA.AddMethod(&sign1)
+// 	sign1 := MethodSignature{Public, NamedType{"int", false}, "getA", []Parameter{}}
+// 	interfaceA.AddMethod(&sign1)
 
-	class1.Implement = interfaceA
-	class1.addMethod(&MethodDeclaration{sign1, StatementList{}})
+// 	class1.Implement = interfaceA
+// 	class1.addMethod(&MethodDeclaration{sign1, StatementList{}})
 
-	if err := class1.checkInterfaceImplementations(); err != nil {
-		t.Errorf("Methods are implemented but got error of %s", err)
-	}
+// 	if err := class1.checkInterfaceImplementations(); err != nil {
+// 		t.Errorf("Methods are implemented but got error of %s", err)
+// 	}
 
-	sign2 := MethodSignature{Public, NamedType{"int", true}, "getB", []Parameter{}}
-	interfaceA.AddMethod(&sign2)
+// 	sign2 := MethodSignature{Public, NamedType{"int", true}, "getB", []Parameter{}}
+// 	interfaceA.AddMethod(&sign2)
 
-	if err := class1.checkInterfaceImplementations(); err == nil {
-		t.Errorf("Methods are NOT implemented but got no errors")
-	}
+// 	if err := class1.checkInterfaceImplementations(); err == nil {
+// 		t.Errorf("Methods are NOT implemented but got no errors")
+// 	}
 
-	class1.addMethod(&MethodDeclaration{
-		MethodSignature{
-			Public,
-			NamedType{"int", true},
-			"getB",
-			[]Parameter{
-				{NamedType{"int", false}, "b"},
-			},
-		},
-		StatementList{},
-	})
+// 	class1.addMethod(&MethodDeclaration{
+// 		MethodSignature{
+// 			Public,
+// 			NamedType{"int", true},
+// 			"getB",
+// 			[]Parameter{
+// 				{NamedType{"int", false}, "b"},
+// 			},
+// 		},
+// 		StatementList{},
+// 	})
 
-	if err := class1.checkInterfaceImplementations(); err == nil {
-		t.Errorf("Same method name with different parameter should return error.")
-	}
-}
+// 	if err := class1.checkInterfaceImplementations(); err == nil {
+// 		t.Errorf("Same method name with different parameter should return error.")
+// 	}
+// }

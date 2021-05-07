@@ -865,7 +865,7 @@ func (c *ConstructorDeclaration) TypeOf() NamedType {
 type Template interface {
 	INode
 	Describe() (typeof string, name string)
-	Members() map[string]Declaration
+	Members() []Declaration
 }
 
 type Interface struct {
@@ -921,11 +921,11 @@ func (i *Interface) ChildNode() INode {
 	return nil
 }
 
-func (i *Interface) Members() map[string]Declaration {
-	members := make(map[string]Declaration, len(i.Methods))
-
-	for k, v := range i.Methods {
-		members[k] = &MethodDeclaration{*v, nil}
+func (i *Interface) Members() []Declaration {
+	members := make([]Declaration, len(i.Methods))
+	j := 0
+	for _, v := range i.Methods {
+		members[j] = &MethodDeclaration{*v, nil}
 	}
 	return members
 }
@@ -934,10 +934,9 @@ type Class struct {
 	Name        string
 	Extend      *Class
 	Implement   *Interface
-	members     map[string]DeclarationType
 	MainMethod  *MainMethodDeclaration
-	Properties  map[string]*PropertyDeclaration
-	Methods     map[string]map[string]*MethodDeclaration
+	Properties  []*PropertyDeclaration
+	Methods     []*MethodDeclaration
 	Constructor map[string]*ConstructorDeclaration
 }
 
@@ -946,10 +945,9 @@ func NewEmptyClass(name string, extend *Class, implementing *Interface) *Class {
 		name,
 		extend,
 		implementing,
-		make(map[string]DeclarationType),
 		nil,
-		make(map[string]*PropertyDeclaration),
-		make(map[string]map[string]*MethodDeclaration),
+		make([]*PropertyDeclaration, 0),
+		make([]*MethodDeclaration, 0),
 		make(map[string]*ConstructorDeclaration),
 	}
 }
@@ -960,17 +958,8 @@ func (c *Class) Describe() (string, string) {
 
 func (c *Class) propertiesString() []string {
 	propStr := make([]string, len(c.Properties))
-	keys := make([]string, len(c.Properties))
-
-	i := 0
-	for key := range c.Properties {
-		keys[i] = key
-		i += 1
-	}
-	// this guarantee the order of occurence in PrettyPrint to be the same
-	sort.Strings(keys)
-	for i, key := range keys {
-		propStr[i] = PrettyPrint(c.Properties[key])
+	for i, prop := range c.Properties {
+		propStr[i] = PrettyPrint(prop)
 	}
 
 	return propStr
@@ -978,12 +967,9 @@ func (c *Class) propertiesString() []string {
 
 func (c *Class) methodsString() []string {
 	methodStr := make([]string, 0)
-	for _, methodNameMap := range c.Methods {
-		for _, method := range methodNameMap {
-			methodStr = append(methodStr, PrettyPrint(method))
-		}
+	for _, method := range c.Methods {
+		methodStr = append(methodStr, PrettyPrint(method))
 	}
-	sort.Strings(methodStr)
 	return methodStr
 }
 
@@ -998,24 +984,25 @@ func (c *Class) constructorString() []string {
 	return conStr
 }
 
-func (c *Class) checkInterfaceImplementations() error {
-	if c.Implement == nil {
-		return nil
-	}
+// TODO: move this to node visitor
+// func (c *Class) checkInterfaceImplementations() error {
+// 	if c.Implement == nil {
+// 		return nil
+// 	}
 
-	interfaceSignatures := c.Implement.Methods
-	for _, sign := range interfaceSignatures {
-		methods := c.Methods[sign.Name]
-		if methods == nil {
-			return fmt.Errorf("Class must implments method of name %s", sign.Name)
-		}
+// 	interfaceSignatures := c.Implement.Methods
+// 	for _, sign := range interfaceSignatures {
+// 		methods := c.Methods[sign.Name]
+// 		if methods == nil {
+// 			return fmt.Errorf("Class must implments method of name %s", sign.Name)
+// 		}
 
-		if _, ok := methods[sign.Signature()]; !ok {
-			return fmt.Errorf("Class must implements %s", sign.Signature())
-		}
-	}
-	return nil
-}
+// 		if _, ok := methods[sign.Signature()]; !ok {
+// 			return fmt.Errorf("Class must implements %s", sign.Signature())
+// 		}
+// 	}
+// 	return nil
+// }
 
 func (c *Class) NodeContent() (string, string) {
 	format := "%s"
@@ -1048,10 +1035,7 @@ func (c *Class) ChildNode() INode {
 
 func (c *Class) addProperty(decl Declaration) {
 	prop := decl.(*PropertyDeclaration)
-	if _, ok := c.Properties[prop.Name]; ok {
-		panic(fmt.Sprintf("Property %s is already exist.", prop.Name))
-	}
-	c.Properties[prop.Name] = prop
+	c.Properties = append(c.Properties, prop)
 }
 
 func (c *Class) addConstructor(decl Declaration) {
@@ -1068,60 +1052,10 @@ func (c *Class) addConstructor(decl Declaration) {
 
 func (c *Class) addMethod(decl Declaration) {
 	method := decl.(*MethodDeclaration)
-	if c.Methods[method.Name] == nil {
-		c.Methods[method.Name] = make(map[string]*MethodDeclaration)
-	}
-
-	if len(c.Methods[method.Name]) > 0 {
-		var key string
-		for k := range c.Methods[method.Name] {
-			key = k
-			break
-		}
-
-		// check if registered method has the same return type
-		// or the same parameter signature as about to be added method
-		sameMethodName := c.Methods[method.Name][key]
-		if sameMethodName.ReturnType != method.ReturnType {
-			panic(fmt.Sprintf("Invalid method overloading.\n Method '%s' already exist with the return type of '%s'",
-				method.Name,
-				sameMethodName.ReturnType.String(),
-			))
-		}
-
-		if sameMethodName.MethodSignature.Equal(method.MethodSignature) {
-			msg := fmt.Sprintf("Method with the same signature are alerady exist.\n%s == %s", method.MethodSignature.Signature(), sameMethodName.Signature())
-			panic(msg)
-		}
-	}
-
-	c.Methods[method.Name][method.Signature()] = method
-}
-
-func (c *Class) isNameTaken(decl Declaration) (bool, string) {
-	for key := range c.Properties {
-		if key == decl.GetName() {
-			return true, "property"
-		}
-	}
-
-	for key := range c.Methods {
-		if key == decl.GetName() && decl.DeclType() == Property {
-			return true, "methods"
-		}
-	}
-
-	return false, ""
+	c.Methods = append(c.Methods, method)
 }
 
 func (c *Class) AddDeclaration(decl Declaration) {
-	if taken, as := c.isNameTaken(decl); taken {
-		panic(fmt.Sprintf("Error: %s is already defined as %s",
-			decl.GetName(),
-			as,
-		))
-	}
-
 	switch decl.DeclType() {
 	case Property:
 		c.addProperty(decl)
@@ -1137,34 +1071,23 @@ func (c *Class) AddDeclaration(decl Declaration) {
 	}
 }
 
-func (c *Class) getFirstMethodOfName(name string) *MethodDeclaration {
-	methods, found := c.Methods[name]
-	if !found {
-		panic("Methods not found")
+func (c *Class) Members() []Declaration {
+	total := len(c.Properties) + len(c.Methods)
+	members := make([]Declaration, total)
+
+	counter := 0
+	for _, prop := range c.Properties {
+		members[counter] = prop
+		counter += 1
 	}
 
-	var sign *MethodDeclaration
-	for _, m := range methods {
-		sign = m
-		break
+	for _, method := range c.Methods {
+		members[counter] = method
+		counter += 1
 	}
-
-	return sign
-}
-
-func (c *Class) Members() map[string]Declaration {
-	members := make(map[string]Declaration, len(c.members))
 
 	if c.MainMethod != nil {
-		members["main"] = c.MainMethod
-	}
-
-	for _, prop := range c.Properties {
-		members[prop.GetName()] = prop
-	}
-
-	for name := range c.Methods {
-		members[name] = c.getFirstMethodOfName(name)
+		members = append(members, c.MainMethod)
 	}
 
 	return members

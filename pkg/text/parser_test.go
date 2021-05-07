@@ -123,7 +123,9 @@ func TestParser_class(t *testing.T) {
 			NamedType{"int", false}, "a", Num(20),
 		},
 	}
-	class2.Properties["a"] = &class2Prop
+	class2.Properties = []*PropertyDeclaration{
+		&class2Prop,
+	}
 
 	class3 := NewEmptyClass("Hello", nil, nil)
 	class3Method := NewMethodDeclaration(
@@ -135,8 +137,7 @@ func TestParser_class(t *testing.T) {
 			&JumpStatement{ReturnJump, nil},
 		},
 	)
-	class3.Methods[class3Method.Name] = make(map[string]*MethodDeclaration)
-	class3.Methods[class3Method.Name][class3Method.Signature()] = class3Method
+	class3.Methods = []*MethodDeclaration{class3Method}
 
 	class4 := NewEmptyClass("Hello", nil, nil)
 	class4Constructor := ConstructorDeclaration{*NewMethodDeclaration(
@@ -165,17 +166,17 @@ func TestParser_class(t *testing.T) {
 	class5.MainMethod = &class5Main
 
 	classCombined := NewEmptyClass("Hello", nil, nil)
-	classCombined.Properties[class2Prop.GetName()] = &class2Prop
+	classCombined.Properties = []*PropertyDeclaration{
+		&class2Prop,
+	}
 
-	classCombined.Methods[class3Method.Name] = make(map[string]*MethodDeclaration)
-	classCombined.Methods[class3Method.Name][class3Method.Signature()] = class3Method
+	classCombined.Methods = []*MethodDeclaration{class3Method}
 
 	classCombined.Constructor[class4Constructor.Signature()] = &class4Constructor
 	classCombined.MainMethod = &class5Main
 
 	classOverloading := NewEmptyClass("Hello", nil, nil)
-	classOverloading.Methods[class3Method.Name] = make(map[string]*MethodDeclaration)
-	classOverloading.Methods[class3Method.Name][class3Method.Signature()] = class3Method
+	classOverloading.Methods = []*MethodDeclaration{class3Method}
 	overLoadMethod := NewMethodDeclaration(
 		Private,
 		NamedType{"void", false},
@@ -187,7 +188,8 @@ func TestParser_class(t *testing.T) {
 			&JumpStatement{ReturnJump, nil},
 		},
 	)
-	classOverloading.Methods[class3Method.Name][overLoadMethod.Signature()] = overLoadMethod
+
+	classOverloading.addMethod(overLoadMethod)
 
 	data := []struct {
 		str    string
@@ -278,61 +280,62 @@ class Hello{
 	}
 }
 
-func TestParser_class_panic(t *testing.T) {
-	data := []string{
-		//duplicate property
-		`class Something{ int a; int a;}`,
-		`class Something{ int a; String a;}`,
+//TODO: move this test to node visitor
+// func TestParser_class_panic(t *testing.T) {
+// 	data := []string{
+// 		//duplicate property
+// 		`class Something{ int a; int a;}`,
+// 		`class Something{ int a; String a;}`,
 
-		// member already defined as other thing
-		`class Something{ int a; int a(){} }`,
+// 		// member already defined as other thing
+// 		`class Something{ int a; int a(){} }`,
 
-		// duplicate method signature
-		`class Something{
-			String Speak(){}
-			String Speak(){return 1;}
-		}`,
+// 		// duplicate method signature
+// 		`class Something{
+// 			String Speak(){}
+// 			String Speak(){return 1;}
+// 		}`,
 
-		// method overloading, different type
-		`class Something{
-			String Speak(){}
-			int Speak(){}
-		}`,
+// 		// method overloading, different type
+// 		`class Something{
+// 			String Speak(){}
+// 			int Speak(){}
+// 		}`,
 
-		`class Something{
-			String Speak(){}
-			int Speak(int i){}
-		}`,
+// 		`class Something{
+// 			String Speak(){}
+// 			int Speak(int i){}
+// 		}`,
 
-		// method without return type
-		`class Something{
-			Nice(int a){}
-		}`,
+// 		// method without return type
+// 		`class Something{
+// 			Nice(int a){}
+// 		}`,
 
-		// constructor overloading
-		`class Something{
-			Something(int a){}
-			Something(int b){}
-		}`,
+// 		// constructor overloading
+// 		`class Something{
+// 			Something(int a){}
+// 			Something(int b){}
+// 		}`,
 
-		// main already defined
-		`class Something{
-			public static void main(String[] args){}
-			public static void main(String[] a){}
-		}`,
+// 		// main already defined
+// 		`class Something{
+// 			public static void main(String[] args){}
+// 			public static void main(String[] a){}
+// 		}`,
 
-		`class Something{
-			private static void main(String[] args){}
-		}`,
-	}
+// 		`class Something{
+// 			private static void main(String[] args){}
+// 		}`,
+// 	}
 
-	for _, str := range data {
-		withParser(str, func(p *Parser) {
-			defer assertPanic(t, fmt.Sprintf("Should panic on \n%s", str))
-			p.classDeclaration()
-		})
-	}
-}
+// 	for _, str := range data {
+// 		withParser(str, func(p *Parser) {
+// 			defer assertPanic(t, fmt.Sprintf("Should panic on \n%s", str))
+// 			p.classDeclaration()
+// 		})
+// 	}
+// }
 
 func TestParser_declaration(t *testing.T) {
 	data := []struct {
