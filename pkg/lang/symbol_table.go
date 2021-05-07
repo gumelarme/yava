@@ -14,9 +14,17 @@ const (
 	Method
 )
 
+func (s SymbolCategory) String() string {
+	return []string{
+		"Type",
+		"Field",
+		"Method",
+	}[s]
+}
+
 type Symbol interface {
 	Name() string
-	Type() Symbol
+	Type() DataType
 	Category() SymbolCategory
 	String() string
 }
@@ -29,8 +37,8 @@ func (t TypeSymbol) Name() string {
 	return t.name
 }
 
-func (t TypeSymbol) Type() Symbol {
-	return t
+func (t TypeSymbol) Type() DataType {
+	return DataType{&t, false}
 }
 
 func (t TypeSymbol) Category() SymbolCategory {
@@ -41,18 +49,22 @@ func (t TypeSymbol) String() string {
 	return fmt.Sprintf("<%s>", t.name)
 }
 
-type FieldSymbol struct {
-	name     string
+type DataType struct {
 	dataType *TypeSymbol
 	isArray  bool
+}
+
+type FieldSymbol struct {
+	DataType
+	name string
 }
 
 func (f FieldSymbol) Name() string {
 	return f.name
 }
 
-func (f FieldSymbol) Type() Symbol {
-	return f.dataType
+func (f FieldSymbol) Type() DataType {
+	return f.DataType
 }
 
 func (f FieldSymbol) Category() SymbolCategory {
@@ -64,17 +76,60 @@ func (f FieldSymbol) String() string {
 }
 
 type MethodSymbol struct {
-	name       string
-	returnType TypeSymbol
-	signature  text.MethodSignature
+	DataType
+	accessMod text.AccessModifier
+	name      string
+	signature map[string]text.MethodSignature
 }
 
+func NewMethodSymbol(decl text.MethodDeclaration, returnType TypeSymbol) MethodSymbol {
+	return MethodSymbol{
+		DataType{
+			&returnType,
+			decl.ReturnType.IsArray,
+		},
+		decl.AccessModifier,
+		decl.Name,
+		make(map[string]text.MethodSignature),
+	}
+}
+
+func (m MethodSymbol) AddSignature(signature text.MethodSignature) error {
+	if m.accessMod != signature.AccessModifier {
+		return fmt.Errorf("Method %s already defined with %s access modifier",
+			m.name,
+			m.accessMod,
+		)
+	}
+
+	if m.dataType.name != signature.ReturnType.Name ||
+		m.isArray != signature.ReturnType.IsArray {
+
+		typeof := m.name
+		if m.isArray {
+			typeof += "[]"
+		}
+
+		return fmt.Errorf("Method %s already defined with return type of %s",
+			m.name,
+			typeof,
+		)
+	}
+
+	signStr := signature.Signature()
+	if _, exist := m.signature[signStr]; exist {
+		return fmt.Errorf("Method with %s signature already exist", signStr)
+	}
+
+	m.signature[signStr] = signature
+	return nil
+}
 func (m MethodSymbol) Name() string {
 	return m.name
 }
 
-func (m MethodSymbol) Type() Symbol {
-	return m.returnType
+func (m MethodSymbol) Type() DataType {
+	return m.DataType
 }
 
 func (m MethodSymbol) Category() SymbolCategory {
@@ -82,7 +137,7 @@ func (m MethodSymbol) Category() SymbolCategory {
 }
 
 func (m MethodSymbol) String() string {
-	return fmt.Sprintf("%s %s()", m.returnType, m.name)
+	return fmt.Sprintf("%s %s()", m.DataType, m.name)
 }
 
 type SymbolTable struct {
@@ -109,6 +164,10 @@ func (s *SymbolTable) Insert(sym Symbol) {
 	if s.isVerbose {
 		fmt.Printf("Insert %s @%s\n", sym.Name(), s.name)
 	}
+}
+
+func (s *SymbolTable) InsertOverloadMethod(name string, signature text.MethodSignature) error {
+	return (s.table[name].(MethodSymbol)).AddSignature(signature)
 }
 
 func (s *SymbolTable) Lookup(name string) Symbol {

@@ -575,7 +575,7 @@ func (v *VariableDeclaration) NodeContent() (string, string) {
 		format += "[]"
 	}
 
-	return "var-declaration", fmt.Sprintf(format, v.Name, v.Type.Name)
+	return "var-decl", fmt.Sprintf(format, v.Name, v.Type.Name)
 }
 
 func (v *VariableDeclaration) ChildNode() INode {
