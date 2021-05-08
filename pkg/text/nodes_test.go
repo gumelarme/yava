@@ -269,7 +269,7 @@ func TestMethodSignature_Equal(t *testing.T) {
 }
 
 func TestClass_Members(t *testing.T) {
-	class := NewEmptyClass("Person", nil, nil)
+	class := NewEmptyClass("Person", "", "")
 	prop := &PropertyDeclaration{
 		Public,
 		VariableDeclaration{

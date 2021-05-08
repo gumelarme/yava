@@ -932,15 +932,15 @@ func (i *Interface) Members() []Declaration {
 
 type Class struct {
 	Name        string
-	Extend      *Class
-	Implement   *Interface
+	Extend      string
+	Implement   string
 	MainMethod  *MainMethodDeclaration
 	Properties  []*PropertyDeclaration
 	Methods     []*MethodDeclaration
 	Constructor map[string]*ConstructorDeclaration
 }
 
-func NewEmptyClass(name string, extend *Class, implementing *Interface) *Class {
+func NewEmptyClass(name string, extend string, implementing string) *Class {
 	return &Class{
 		name,
 		extend,
@@ -1008,12 +1008,12 @@ func (c *Class) NodeContent() (string, string) {
 	format := "%s"
 	args := []interface{}{c.Name}
 
-	if c.Extend != nil {
+	if len(c.Extend) > 0 {
 		format += " :extend %s"
-		args = append(args, c.Extend.Name)
-	} else if c.Implement != nil {
+		args = append(args, c.Extend)
+	} else if len(c.Implement) > 0 {
 		format += " :implement %s"
-		args = append(args, c.Implement.Name)
+		args = append(args, c.Implement)
 	}
 
 	format += "\n\t:props [%s] \n\t:methods [%s] \n\t:constructor [%s]"
@@ -1093,20 +1093,15 @@ func (c *Class) Members() []Declaration {
 	return members
 }
 
-type Program map[string]Template
+type Program []Template
 
 func (p Program) Equal(val Program) bool {
 	if len(p) != len(val) {
 		return false
 	}
 
-	for key, template := range p {
-		member, ok := val[key]
-		if !ok {
-			return false
-		}
-
-		if PrettyPrint(member) != PrettyPrint(template) {
+	for i, template := range p {
+		if PrettyPrint(val[i]) != PrettyPrint(template) {
 			return false
 		}
 	}
@@ -1114,16 +1109,7 @@ func (p Program) Equal(val Program) bool {
 }
 
 func (p *Program) AddTemplate(template Template) {
-	if len(*p) == 0 {
-		*p = make(map[string]Template)
-	}
-
-	ty, name := template.Describe()
-	if _, taken := (*p)[name]; taken {
-		panic(fmt.Sprintf("'%s' is already defined as %s", name, ty))
-	}
-
-	(*p)[name] = template
+	(*p) = append(*p, template)
 }
 
 func (p Program) ChildNode() INode {
@@ -1132,17 +1118,8 @@ func (p Program) ChildNode() INode {
 
 func (p Program) NodeContent() (string, string) {
 	str := make([]string, len(p))
-	keys := make([]string, len(p))
-
-	i := 0
-	for key := range p {
-		keys[i] = key
-		i += 1
-	}
-
-	sort.Strings(keys)
-	for j, key := range keys {
-		str[j] = PrettyPrint(p[key])
+	for j, val := range p {
+		str[j] = PrettyPrint(val)
 	}
 
 	return "program", fmt.Sprintf(":declarations [\n\t%s]", strings.Join(str, ",\n\t"))

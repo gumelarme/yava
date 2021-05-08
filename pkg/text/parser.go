@@ -24,7 +24,7 @@ func NewParser(lexer *Lexer) Parser {
 		lexer,
 		&tok,
 		false,
-		make(Program),
+		make(Program, 0),
 	}
 }
 
@@ -103,7 +103,7 @@ func (p *Parser) methodSignature() *MethodSignature {
 
 func (p *Parser) classDeclaration() *Class {
 	p.match(Keyword)
-	class := NewEmptyClass(p.match(Id), nil, nil)
+	class := NewEmptyClass(p.match(Id), "", "")
 	if key := p.curToken.Value(); p.curToken.Type == Keyword &&
 		key == "extends" ||
 		key == "implements" {
@@ -123,17 +123,10 @@ func (p *Parser) classDeclaration() *Class {
 func (p *Parser) classExtends(class *Class) {
 	key := p.match(Keyword)
 	name := p.match(Id)
-	val, ok := p.program[name]
-
-	if !ok {
-		msg := "Unable to %s %s because %s is undefined"
-		panic(fmt.Sprintf(msg, key, name, name))
-	}
-
 	if key == "extends" {
-		class.Extend = val.(*Class)
+		class.Extend = name
 	} else if key == "implements" {
-		class.Implement = val.(*Interface)
+		class.Implement = name
 	} else {
 		panic("Expect `extends` or `implements` keyword.")
 	}

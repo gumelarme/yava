@@ -13,12 +13,9 @@ func withParser(s string, parserAction func(p *Parser)) {
 }
 
 func TestParser_program(t *testing.T) {
-	helloClass := NewEmptyClass("Hello", nil, nil)
+	helloClass := NewEmptyClass("Hello", "", "")
 	greetInterface := &Interface{"Greet", nil}
-	expect := Program{
-		"Hello": helloClass,
-		"Greet": greetInterface,
-	}
+	expect := Program{helloClass, greetInterface}
 	str := `class Hello {} interface Greet {}`
 	withParser(str, func(p *Parser) {
 		program := p.Compile()
@@ -88,13 +85,13 @@ func TestParser_interface_panic(t *testing.T) {
 }
 
 func TestParser_classExtends(t *testing.T) {
-	classA := NewEmptyClass("A", nil, nil)
-	classB := NewEmptyClass("B", classA, nil)
-	program1 := Program{"A": classA, "B": classB}
+	classA := NewEmptyClass("A", "", "")
+	classB := NewEmptyClass("B", "A", "")
+	program1 := Program{classA, classB}
 
 	interfaceA := Interface{"A", nil}
-	classC := NewEmptyClass("C", nil, &interfaceA)
-	program2 := Program{"A": &interfaceA, "C": classC}
+	classC := NewEmptyClass("C", "", "A")
+	program2 := Program{&interfaceA, classC}
 
 	classBStr := `class A {} class B extends A {}`
 	classCStr := `interface A {} class C implements A {}`
@@ -115,9 +112,9 @@ func TestParser_classExtends(t *testing.T) {
 }
 
 func TestParser_class(t *testing.T) {
-	class1 := NewEmptyClass("Hello", nil, nil)
+	class1 := NewEmptyClass("Hello", "", "")
 
-	class2 := NewEmptyClass("Hello", nil, nil)
+	class2 := NewEmptyClass("Hello", "", "")
 	class2Prop := PropertyDeclaration{Public,
 		VariableDeclaration{
 			NamedType{"int", false}, "a", Num(20),
@@ -127,7 +124,7 @@ func TestParser_class(t *testing.T) {
 		&class2Prop,
 	}
 
-	class3 := NewEmptyClass("Hello", nil, nil)
+	class3 := NewEmptyClass("Hello", "", "")
 	class3Method := NewMethodDeclaration(
 		Private,
 		NamedType{"void", false},
@@ -139,7 +136,7 @@ func TestParser_class(t *testing.T) {
 	)
 	class3.Methods = []*MethodDeclaration{class3Method}
 
-	class4 := NewEmptyClass("Hello", nil, nil)
+	class4 := NewEmptyClass("Hello", "", "")
 	class4Constructor := ConstructorDeclaration{*NewMethodDeclaration(
 		Private,
 		NamedType{"<this>", false},
@@ -151,7 +148,7 @@ func TestParser_class(t *testing.T) {
 	)}
 	class4.Constructor[class4Constructor.Signature()] = &class4Constructor
 
-	class5 := NewEmptyClass("Hello", nil, nil)
+	class5 := NewEmptyClass("Hello", "", "")
 	class5Main := MainMethodDeclaration{*NewMethodDeclaration(
 		Public,
 		NamedType{"void", false},
@@ -165,7 +162,7 @@ func TestParser_class(t *testing.T) {
 	)}
 	class5.MainMethod = &class5Main
 
-	classCombined := NewEmptyClass("Hello", nil, nil)
+	classCombined := NewEmptyClass("Hello", "", "")
 	classCombined.Properties = []*PropertyDeclaration{
 		&class2Prop,
 	}
@@ -175,7 +172,7 @@ func TestParser_class(t *testing.T) {
 	classCombined.Constructor[class4Constructor.Signature()] = &class4Constructor
 	classCombined.MainMethod = &class5Main
 
-	classOverloading := NewEmptyClass("Hello", nil, nil)
+	classOverloading := NewEmptyClass("Hello", "", "")
 	classOverloading.Methods = []*MethodDeclaration{class3Method}
 	overLoadMethod := NewMethodDeclaration(
 		Private,

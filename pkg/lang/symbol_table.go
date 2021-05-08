@@ -54,6 +54,14 @@ type DataType struct {
 	isArray  bool
 }
 
+func (d DataType) String() string {
+	str := d.dataType.name
+	if d.isArray {
+		str += "[]"
+	}
+	return str
+}
+
 type FieldSymbol struct {
 	DataType
 	name string

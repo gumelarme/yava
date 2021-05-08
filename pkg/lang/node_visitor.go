@@ -86,6 +86,10 @@ func (n *NodeVisitor) visit(node text.INode) {
 
 func (n *NodeVisitor) visitClass(node text.INode) {
 	class := node.(*text.Class)
+	if decl := n.curScope.Lookup(class.Name); decl != nil {
+		n.addError(fmt.Errorf("Type %s is already declared.", decl.Name()))
+	}
+
 	typesymbol := TypeSymbol{class.Name}
 	n.curScope.Insert(typesymbol)
 
