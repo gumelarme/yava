@@ -22,6 +22,15 @@ func NewNodeVisitor() *NodeVisitor {
 		"property-decl":   node.visitProperties,
 		"method-decl":     node.visitMethodDeclaration,
 		"var-decl":        node.visitVariableDeclaration,
+		"stmt-block":      node.visitStatementList,
+		"switch":          node.visitSwitchStatement,
+		"if":              node.visitIfStatement,
+		"for":             node.visitForStatement,
+		"while":           node.visitWhileStatement,
+		"assignment":      node.visitAssignmentStatement,
+		"return":          node.visitJumpStatement,
+		"continue":        node.visitJumpStatement,
+		"break":           node.visitJumpStatement,
 		"field":           node.visitFieldAccess,
 		"method-call":     node.visitMethodCall,
 		"array-creation":  node.visitArrayCreation,
@@ -235,4 +244,61 @@ func (n *NodeVisitor) visitObjectCreation(node text.INode) {
 	if object.ChildNode() != nil {
 		n.visit(object.ChildNode())
 	}
+}
+
+func (n *NodeVisitor) visitJumpStatement(node text.INode) {
+	jump := node.(*text.JumpStatement)
+	if jump.Exp != nil {
+		n.visit(jump.Exp)
+	}
+}
+
+func (n *NodeVisitor) visitAssignmentStatement(node text.INode) {
+	assign := node.(*text.AssignmentStatement)
+	n.visit(assign.Left)
+	n.visit(assign.Right)
+}
+
+func (n *NodeVisitor) visitSwitchStatement(node text.INode) {
+	switchStmt := node.(*text.SwitchStatement)
+	n.visit(switchStmt.ValueToCompare)
+	for _, c := range switchStmt.CaseList {
+		n.visit(c.Value)
+		for _, stmt := range c.StatementList {
+			n.visit(stmt)
+		}
+	}
+
+	for _, d := range switchStmt.DefaultCase {
+		n.visit(d.ChildNode())
+	}
+}
+
+func (n *NodeVisitor) visitIfStatement(node text.INode) {
+	ifStmt := node.(*text.IfStatement)
+	n.visit(ifStmt.Condition)
+	n.visit(ifStmt.Body)
+	if ifStmt.Else != nil {
+		n.visit(ifStmt.Else)
+	}
+}
+
+func (n *NodeVisitor) visitForStatement(node text.INode) {
+	forStmt := node.(*text.ForStatement)
+	if forStmt.Init != nil {
+		n.visit(forStmt.Init)
+	}
+	if forStmt.Condition != nil {
+		n.visit(forStmt.Condition)
+	}
+	if forStmt.Update != nil {
+		n.visit(forStmt.Update)
+	}
+	n.visit(forStmt.Body)
+
+}
+func (n *NodeVisitor) visitWhileStatement(node text.INode) {
+	while := node.(*text.WhileStatement)
+	n.visit(while.Condition)
+	n.visit(while.Body)
 }
