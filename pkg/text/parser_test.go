@@ -30,14 +30,14 @@ func TestParser_interface(t *testing.T) {
 	int1 := NewInterface("Something")
 
 	int2 := NewInterface("Something")
-	int2.Methods[method1.Signature()] = &method1
+	int2.AddMethod(&method1)
 
 	int3 := NewInterface("Something")
-	int3.Methods[method2.Signature()] = &method2
+	int3.AddMethod(&method2)
 
 	int4 := NewInterface("Something")
-	int4.Methods[method1.Signature()] = &method1
-	int4.Methods[method2.Signature()] = &method2
+	int4.AddMethod(&method1)
+	int4.AddMethod(&method2)
 
 	data := []struct {
 		str    string
@@ -69,19 +69,6 @@ func TestParser_interface(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestParser_interface_panic(t *testing.T) {
-	str := []string{
-		"interface Something{int Count(); int Count();}",
-	}
-	for _, s := range str {
-		withParser(s, func(p *Parser) {
-			defer assertPanic(t, fmt.Sprintf("Should have panic on \n%s", s))
-			p.interfaceDeclaration()
-		})
-	}
-
 }
 
 func TestParser_classExtends(t *testing.T) {

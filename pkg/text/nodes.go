@@ -870,13 +870,13 @@ type Template interface {
 
 type Interface struct {
 	Name    string
-	Methods map[string]*MethodSignature
+	Methods []*MethodSignature
 }
 
 func NewInterface(name string) *Interface {
 	return &Interface{
 		name,
-		make(map[string]*MethodSignature),
+		make([]*MethodSignature, 0),
 	}
 }
 
@@ -886,28 +886,16 @@ func (i *Interface) Describe() (string, string) {
 
 func (i *Interface) AddMethod(method *MethodSignature) {
 	if i.Methods == nil {
-		i.Methods = make(map[string]*MethodSignature)
+		i.Methods = make([]*MethodSignature, 0)
 	}
 
-	if _, ok := i.Methods[method.Signature()]; ok {
-		panic("Method with the same signature already exist.")
-	}
-
-	i.Methods[method.Signature()] = method
+	i.Methods = append(i.Methods, method)
 }
 
 func (i *Interface) NodeContent() (string, string) {
 	methods := make([]string, len(i.Methods))
-	keys := make([]string, len(i.Methods))
-	j := 0
-	for key := range i.Methods {
-		keys[j] = key
-		j += 1
-	}
-
-	sort.Strings(keys)
-	for j, key := range keys {
-		methods[j] = PrettyPrint(i.Methods[key])
+	for j, method := range i.Methods {
+		methods[j] = PrettyPrint(method)
 	}
 
 	return "interface",

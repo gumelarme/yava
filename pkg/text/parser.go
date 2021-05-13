@@ -35,10 +35,10 @@ func (p *Parser) match(token TokenType) string {
 
 	value := p.curToken.Value()
 	if p.curToken.Type != token {
-		msg := fmt.Sprintf("Expected %s but got %s at %s",
+		msg := fmt.Sprintf("|%s| Expected %s but got %s",
+			p.curToken.Position,
 			token,
 			p.curToken.Type,
-			p.curToken.Position,
 		)
 		panic(msg)
 	}
