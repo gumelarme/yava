@@ -8,8 +8,35 @@ import (
 	"strings"
 )
 
+type Visitor interface {
+	VisitProgram(program Program)
+	VisitClass(*Class)
+	VisitInterface(*Interface)
+	VisitPropertyDeclaration(*PropertyDeclaration)
+	VisitMethodSignature(*MethodSignature)
+	VisitMethodDeclaration(*MethodDeclaration)
+	VisitVariableDeclaration(*VariableDeclaration)
+	VisitStatementList(StatementList)
+	VisitAfterStatementList()
+	VisitSwitchStatement(*SwitchStatement)
+	VisitIfStatement(*IfStatement)
+	VisitForStatement(*ForStatement)
+	VisitWhileStatement(*WhileStatement)
+	VisitAssignmentStatement(*AssignmentStatement)
+	VisitJumpStatement(*JumpStatement)
+	VisitFieldAccess(*FieldAccess)
+	VisitArrayAccess(*ArrayAccess)
+	VisitArrayAccessDelegate(NamedValue)
+	VisitMethodCall(*MethodCall)
+	VisitArrayCreation(*ArrayCreation)
+	VisitObjectCreation(*ObjectCreation)
+	VisitBinOp(*BinOp)
+	VisitConstant(Expression)
+}
+
 // Node represent a basic AST Node
 type INode interface {
+	Accept(Visitor)
 	NodeContent() (name string, content string)
 	ChildNode() INode
 }
@@ -81,6 +108,10 @@ func (Null) IsExpression() bool {
 	return true
 }
 
+func (n Null) Accept(visitor Visitor) {
+	visitor.VisitConstant(&n)
+}
+
 type Num int
 
 func NumFromStr(str string) Num {
@@ -108,6 +139,10 @@ func (n Num) IsExpression() bool {
 
 func (Num) GetType() PrimitiveType {
 	return IntType
+}
+
+func (n Num) Accept(v Visitor) {
+	v.VisitConstant(n)
 }
 
 type Boolean bool
@@ -141,6 +176,10 @@ func (Boolean) GetType() PrimitiveType {
 	return BooleanType
 }
 
+func (b Boolean) Accept(v Visitor) {
+	v.VisitConstant(b)
+}
+
 type Char rune
 
 func NewChar(s string) Char {
@@ -171,6 +210,10 @@ func (Char) GetType() PrimitiveType {
 	return BooleanType
 }
 
+func (c Char) Accept(v Visitor) {
+	v.VisitConstant(c)
+}
+
 type String string
 
 func (s String) NodeContent() (string, string) {
@@ -182,6 +225,10 @@ func (String) ChildNode() INode {
 
 func (String) IsExpression() bool {
 	return true
+}
+
+func (s String) Accept(v Visitor) {
+	v.VisitConstant(s)
 }
 
 type NamedValue interface {
@@ -208,6 +255,11 @@ func (t *This) IsExpression() bool {
 	return true
 }
 
+//FIXME: do something to this
+func (t *This) Accept(v Visitor) {
+	v.VisitConstant(t)
+}
+
 type FieldAccess struct {
 	Name  string
 	Child NamedValue
@@ -229,6 +281,21 @@ func (FieldAccess) IsExpression() bool {
 	return true
 }
 
+func (f *FieldAccess) Accept(v Visitor) {
+	v.VisitFieldAccess(f)
+	if f.Child == nil {
+		return
+	}
+
+	name, _ := f.Child.NodeContent()
+	if name == "array" {
+		arr := f.Child.(*ArrayAccess)
+		arr.AcceptDelegate(f, v)
+	} else {
+		f.Child.Accept(v)
+	}
+}
+
 type ArrayAccess struct {
 	At    Expression
 	Child NamedValue
@@ -248,6 +315,20 @@ func (ArrayAccess) IsExpression() bool {
 
 func (a *ArrayAccess) ChildNode() INode {
 	return a.Child
+}
+
+func (a *ArrayAccess) AcceptDelegate(val NamedValue, visitor Visitor) {
+	visitor.VisitArrayAccessDelegate(val)
+	a.Accept(visitor)
+}
+
+func (a *ArrayAccess) Accept(v Visitor) {
+	v.VisitArrayAccess(a)
+	a.At.Accept(v)
+
+	if a.Child != nil {
+		a.Child.Accept(v)
+	}
 }
 
 type MethodCall struct {
@@ -275,6 +356,26 @@ func (m *MethodCall) ChildNode() INode {
 
 func (MethodCall) IsExpression() bool {
 	return true
+}
+
+func (m *MethodCall) Accept(v Visitor) {
+	v.VisitMethodCall(m)
+	for _, arg := range m.Args {
+		arg.Accept(v)
+
+	}
+
+	if m.Child == nil {
+		return
+	}
+
+	name, _ := m.Child.NodeContent()
+	if name == "array" {
+		arr := m.Child.(*ArrayAccess)
+		arr.AcceptDelegate(m, v)
+	} else {
+		m.Child.Accept(v)
+	}
 }
 
 type BinOp struct {
@@ -315,6 +416,12 @@ func (b *BinOp) GetOperator() Token {
 	return b.operator
 }
 
+func (b *BinOp) Accept(v Visitor) {
+	v.VisitBinOp(b)
+	b.Left.Accept(v)
+	b.Right.Accept(v)
+}
+
 //TODO: create proper object creation struct
 type ObjectCreation struct {
 	MethodCall
@@ -341,6 +448,11 @@ func (a *ArrayCreation) ChildNode() INode {
 
 func (a *ArrayCreation) IsExpression() bool {
 	return true
+}
+
+func (a *ArrayCreation) Accept(v Visitor) {
+	v.VisitArrayCreation(a)
+	a.Length.Accept(v)
 }
 
 type Statement interface {
@@ -374,6 +486,14 @@ func (s StatementList) IsStatement() bool {
 func (s StatementList) String() string {
 	x := s.ContentString()
 	return fmt.Sprintf("[%s]", x)
+}
+
+func (s StatementList) Accept(v Visitor) {
+	v.VisitStatementList(s)
+	for _, statement := range s {
+		statement.Accept(v)
+	}
+	v.VisitAfterStatementList()
 }
 
 type JumpType int
@@ -415,6 +535,13 @@ func (j *JumpStatement) IsStatement() bool {
 	return true
 }
 
+func (j *JumpStatement) Accept(v Visitor) {
+	v.VisitJumpStatement(j)
+	if j.Exp != nil {
+		j.Exp.Accept(v)
+	}
+}
+
 type AssignmentStatement struct {
 	Operator Token
 	Left     NamedValue
@@ -441,6 +568,12 @@ func (a *AssignmentStatement) ChildNode() INode {
 
 func (a *AssignmentStatement) IsStatement() bool {
 	return true
+}
+
+func (a *AssignmentStatement) Accept(v Visitor) {
+	v.VisitAssignmentStatement(a)
+	a.Left.Accept(v)
+	a.Right.Accept(v)
 }
 
 type CaseStatement struct {
@@ -501,6 +634,19 @@ func (s *SwitchStatement) IsStatement() bool {
 	return true
 }
 
+func (s *SwitchStatement) Accept(v Visitor) {
+	v.VisitSwitchStatement(s)
+	for _, c := range s.CaseList {
+		c.Value.Accept(v)
+		c.StatementList.Accept(v)
+	}
+
+	for _, d := range s.DefaultCase {
+		d.Accept(v)
+	}
+
+}
+
 type IfStatement struct {
 	Condition Expression
 	Body      Statement
@@ -527,6 +673,16 @@ func (i *IfStatement) IsStatement() bool {
 	return true
 }
 
+func (i *IfStatement) Accept(v Visitor) {
+	v.VisitIfStatement(i)
+	i.Condition.Accept(v)
+	i.Body.Accept(v)
+
+	if i.Else != nil {
+		i.Else.Accept(v)
+	}
+}
+
 type WhileStatement struct {
 	Condition Expression
 	Body      Statement
@@ -546,6 +702,13 @@ func (w *WhileStatement) ChildNode() INode {
 func (w *WhileStatement) IsStatement() bool {
 	return true
 }
+func (w *WhileStatement) Accept(v Visitor) {
+	v.VisitWhileStatement(w)
+	if w.Condition != nil {
+		w.Condition.Accept(v)
+	}
+	w.Body.Accept(v)
+}
 
 type MethodCallStatement struct {
 	Method NamedValue
@@ -561,6 +724,10 @@ func (m *MethodCallStatement) ChildNode() INode {
 
 func (m *MethodCallStatement) IsStatement() bool {
 	return true
+}
+
+func (m *MethodCallStatement) Accept(v Visitor) {
+	m.Method.Accept(v)
 }
 
 type VariableDeclaration struct {
@@ -584,6 +751,13 @@ func (v *VariableDeclaration) ChildNode() INode {
 
 func (v *VariableDeclaration) IsStatement() bool {
 	return true
+}
+
+func (varDecl *VariableDeclaration) Accept(v Visitor) {
+	v.VisitVariableDeclaration(varDecl)
+	if varDecl.Value != nil {
+		varDecl.Value.Accept(v)
+	}
 }
 
 type ForStatement struct {
@@ -625,6 +799,27 @@ func (f *ForStatement) ChildNode() INode {
 
 func (f *ForStatement) IsStatement() bool {
 	return true
+}
+
+func (f *ForStatement) Accept(v Visitor) {
+	v.VisitForStatement(f)
+	if f.Init != nil {
+		f.Init.Accept(v)
+	}
+
+	if f.Condition != nil {
+		f.Condition.Accept(v)
+	}
+
+	if f.Update != nil {
+		f.Condition.Accept(v)
+	}
+
+	f.Body.Accept(v)
+
+	if name, _ := f.Init.NodeContent(); name == "var-decl" {
+		v.VisitAfterStatementList()
+	}
 }
 
 // ----------------- END OF STATEMENTS
@@ -695,6 +890,13 @@ func (p *PropertyDeclaration) DeclType() DeclarationType {
 
 func (p *PropertyDeclaration) TypeOf() NamedType {
 	return p.VariableDeclaration.Type
+}
+
+func (p *PropertyDeclaration) Accept(visitor Visitor) {
+	visitor.VisitPropertyDeclaration(p)
+	if p.Value != nil {
+		p.Value.Accept(visitor)
+	}
 }
 
 type Parameter struct {
@@ -772,6 +974,10 @@ func (m *MethodSignature) Signature() string {
 	)
 }
 
+func (m *MethodSignature) Accept(v Visitor) {
+	v.VisitMethodSignature(m)
+}
+
 type MethodDeclaration struct {
 	MethodSignature
 	Body StatementList
@@ -806,6 +1012,12 @@ func (m *MethodDeclaration) DeclType() DeclarationType {
 
 func (m *MethodDeclaration) TypeOf() NamedType {
 	return m.ReturnType
+}
+
+func (m *MethodDeclaration) Accept(v Visitor) {
+	m.MethodSignature.Accept(v)
+	v.VisitMethodDeclaration(m)
+	m.Body.Accept(v)
 }
 
 type MainMethodDeclaration struct {
@@ -918,6 +1130,14 @@ func (i *Interface) Members() []Declaration {
 	return members
 }
 
+// FIXME : Do something to method signature
+func (i *Interface) Accept(v Visitor) {
+	v.VisitInterface(i)
+	for _, method := range i.Methods {
+		method.Accept(v)
+	}
+}
+
 type Class struct {
 	Name        string
 	Extend      string
@@ -940,6 +1160,15 @@ func NewEmptyClass(name string, extend string, implementing string) *Class {
 	}
 }
 
+func (c *Class) Accept(visitor Visitor) {
+	for _, prop := range c.Properties {
+		prop.Accept(visitor)
+	}
+
+	for _, method := range c.Methods {
+		method.Accept(visitor)
+	}
+}
 func (c *Class) Describe() (string, string) {
 	return "class", c.Name
 }
@@ -1111,4 +1340,16 @@ func (p Program) NodeContent() (string, string) {
 	}
 
 	return "program", fmt.Sprintf(":declarations [\n\t%s]", strings.Join(str, ",\n\t"))
+}
+
+func (p Program) Accept(visitor Visitor) {
+	visitor.VisitProgram(p)
+	for _, decl := range p {
+		name, _ := decl.NodeContent()
+		if name == "class" {
+			class := decl.(*Class)
+			class.Accept(visitor)
+			// visitor.Engine.VisitClass()
+		}
+	}
 }

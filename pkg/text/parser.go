@@ -288,7 +288,7 @@ func (p *Parser) statement() (stmt Statement) {
 
 	if p.curToken.Type == Keyword {
 		switch p.curToken.Value() {
-		case "return", "break":
+		case "return", "break", "continue":
 			stmt = p.jumpStmt()
 		case "switch":
 			stmt = p.switchStmt()

@@ -90,14 +90,14 @@ type MethodSymbol struct {
 	signature map[string]text.MethodSignature
 }
 
-func NewMethodSymbol(decl text.MethodDeclaration, returnType TypeSymbol) MethodSymbol {
+func NewMethodSymbol(signature text.MethodSignature, returnType TypeSymbol) MethodSymbol {
 	return MethodSymbol{
 		DataType{
 			&returnType,
-			decl.ReturnType.IsArray,
+			signature.ReturnType.IsArray,
 		},
-		decl.AccessModifier,
-		decl.Name,
+		signature.AccessModifier,
+		signature.Name,
 		make(map[string]text.MethodSignature),
 	}
 }
