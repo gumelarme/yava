@@ -21,10 +21,10 @@ func NewNodeVisitor() *NodeVisitor {
 }
 
 func (n *NodeVisitor) initBasicTypes() {
-	n.curScope.Insert(TypeSymbol{"int"})
-	n.curScope.Insert(TypeSymbol{"char"})
-	n.curScope.Insert(TypeSymbol{"boolean"})
-	n.curScope.Insert(TypeSymbol{"String"})
+	n.curScope.Insert(NewType("int", Primitive))
+	n.curScope.Insert(NewType("char", Primitive))
+	n.curScope.Insert(NewType("boolean", Primitive))
+	n.curScope.Insert(NewType("String", Primitive))
 }
 
 func (n *NodeVisitor) Errors() []error {
@@ -66,7 +66,7 @@ func (n *NodeVisitor) VisitClass(class *text.Class) {
 		n.addError(fmt.Errorf("Type %s is already declared.", decl.Name()))
 	}
 
-	typesymbol := TypeSymbol{class.Name}
+	typesymbol := NewType(class.Name, Class)
 	n.curScope.Insert(typesymbol)
 
 	name := fmt.Sprintf("[Class: %s]", class.Name)
@@ -75,11 +75,14 @@ func (n *NodeVisitor) VisitClass(class *text.Class) {
 
 	n.curScope.Insert(FieldSymbol{
 		DataType{
-			&typesymbol,
+			typesymbol,
 			false,
 		},
 		"this",
 	})
+}
+
+func (n *NodeVisitor) VisitAfterClass(class *text.Class) {
 }
 
 func (n *NodeVisitor) VisitPropertyDeclaration(prop *text.PropertyDeclaration) {
@@ -98,13 +101,13 @@ func (n *NodeVisitor) VisitMethodSignature(signature *text.MethodSignature) {
 	method := n.curScope.Lookup(signature.Name)
 	if method == nil {
 		symbol := NewMethodSymbol(*signature, typeof)
-		symbol.AddSignature(*signature)
+		// symbol.AddSignature(*signature)
 		n.curScope.Insert(symbol)
 	} else {
-		err := n.curScope.InsertOverloadMethod(method.Name(), *signature)
-		if err != nil {
-			n.errors = append(n.errors, err)
-		}
+		// err := n.curScope.InsertOverloadMethod(method.Name(), *signature)
+		// if err != nil {
+		// 	n.errors = append(n.errors, err)
+		// }
 	}
 
 	if len(signature.ParameterList) == 0 {
@@ -181,7 +184,12 @@ func (n *NodeVisitor) VisitArrayAccessDelegate(val text.NamedValue) {
 	}
 
 	symbol := n.curScope.Lookup(name)
-	if !symbol.Type().isArray {
+	if symbol.Category() == Type {
+		n.addError(fmt.Errorf("%s is a type, expected a method or a field.", symbol.Name()))
+		return
+	}
+
+	if !symbol.(TypeMember).Type().isArray {
 		n.addError(fmt.Errorf("%s %s is not an array", symbol.Category(), symbol.Name()))
 		return
 	}

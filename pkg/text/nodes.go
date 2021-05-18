@@ -11,6 +11,7 @@ import (
 type Visitor interface {
 	VisitProgram(program Program)
 	VisitClass(*Class)
+	VisitAfterClass(*Class)
 	VisitInterface(*Interface)
 	VisitPropertyDeclaration(*PropertyDeclaration)
 	VisitMethodSignature(*MethodSignature)
@@ -967,8 +968,7 @@ func (m *MethodSignature) ParamSignature() []string {
 }
 
 func (m *MethodSignature) Signature() string {
-	return fmt.Sprintf("<%s> %s (%s)",
-		m.ReturnType.String(),
+	return fmt.Sprintf("%s(%s)",
 		m.Name,
 		strings.Join(m.ParamSignature(), ", "),
 	)
@@ -1051,7 +1051,7 @@ func NewConstructor(acc AccessModifier, name string, param []Parameter, body Sta
 		MethodDeclaration{
 			MethodSignature{
 				acc,
-				NamedType{"<this>", false},
+				NamedType{name, false},
 				name,
 				param,
 			},
@@ -1161,6 +1161,7 @@ func NewEmptyClass(name string, extend string, implementing string) *Class {
 }
 
 func (c *Class) Accept(visitor Visitor) {
+	visitor.VisitClass(c)
 	for _, prop := range c.Properties {
 		prop.Accept(visitor)
 	}
@@ -1168,6 +1169,16 @@ func (c *Class) Accept(visitor Visitor) {
 	for _, method := range c.Methods {
 		method.Accept(visitor)
 	}
+
+	for _, cons := range c.Constructor {
+		cons.Accept(visitor)
+	}
+
+	if c.MainMethod != nil {
+		c.MainMethod.Accept(visitor)
+	}
+
+	visitor.VisitAfterClass(c)
 }
 func (c *Class) Describe() (string, string) {
 	return "class", c.Name
@@ -1342,6 +1353,7 @@ func (p Program) NodeContent() (string, string) {
 	return "program", fmt.Sprintf(":declarations [\n\t%s]", strings.Join(str, ",\n\t"))
 }
 
+// TODO: sort from interface, plain class, to has implement or extends classes
 func (p Program) Accept(visitor Visitor) {
 	visitor.VisitProgram(p)
 	for _, decl := range p {
@@ -1349,7 +1361,12 @@ func (p Program) Accept(visitor Visitor) {
 		if name == "class" {
 			class := decl.(*Class)
 			class.Accept(visitor)
-			// visitor.Engine.VisitClass()
+		}
+
+		if name == "interface" {
+			inf := decl.(*Interface)
+			inf.Accept(visitor)
+
 		}
 	}
 }

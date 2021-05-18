@@ -126,7 +126,7 @@ func TestParser_class(t *testing.T) {
 	class4 := NewEmptyClass("Hello", "", "")
 	class4Constructor := ConstructorDeclaration{*NewMethodDeclaration(
 		Private,
-		NamedType{"<this>", false},
+		NamedType{"Hello", false},
 		"Hello",
 		[]Parameter{},
 		StatementList{
