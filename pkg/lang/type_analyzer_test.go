@@ -92,6 +92,10 @@ func TestTypeAnalyzer_Class(t *testing.T) {
 
 	testNoError(func(engine *TypeAnalyzer) {
 		engine.VisitClass(classHuman)
+		table := engine.GetTypeTable()
+		if _, exist := table["Human"]; !exist {
+			t.Errorf("Expecting 'Human' class to be present in the table")
+		}
 	})
 
 	testNoError(func(engine *TypeAnalyzer) {
@@ -99,6 +103,22 @@ func TestTypeAnalyzer_Class(t *testing.T) {
 		person.Extend = "Human"
 		engine.VisitClass(classHuman)
 		engine.VisitClass(&person)
+
+		humanExist := engine.typeExist("Human")
+		if !humanExist {
+			t.Errorf("Expecting 'Human' class to be present in the table")
+		}
+
+		personExist := engine.typeExist("Person")
+		if !personExist {
+			t.Errorf("Expecting 'Person' class to be present in the table\n%#v", engine.table)
+		}
+
+		personType := engine.table["Person"]
+		humanType := engine.table["Human"]
+		if personType.extends != humanType {
+			t.Errorf("'Person' should have a pointer to 'Human' Type symbol")
+		}
 	})
 
 	testNoError(func(engine *TypeAnalyzer) {
@@ -106,6 +126,23 @@ func TestTypeAnalyzer_Class(t *testing.T) {
 		person.Implement = "Callable"
 		engine.VisitInterface(interfaceCallable)
 		engine.VisitClass(&person)
+
+		callableExist := engine.typeExist("Callable")
+		if !callableExist {
+			t.Errorf("Expecting 'Callable' class to be present in the table")
+		}
+
+		personExist := engine.typeExist("Person")
+		if !personExist {
+			t.Errorf("Expecting 'Person' class to be present in the table\n%#v", engine.table)
+		}
+
+		personType := engine.table["Person"]
+		callableType := engine.table["Callable"]
+		if personType.implements != callableType {
+			t.Errorf("'Person' should have a pointer to 'Callable' interface")
+		}
+
 	})
 }
 
@@ -266,6 +303,15 @@ func TestTypeAnalyzer_MethodDeclaration(t *testing.T) {
 		t.Errorf("Should be error free but got:\n %s", visitor.error[0])
 	}
 
+	humanType := visitor.table["Human"]
+	method := humanType.Methods[newMethodAge.Signature()]
+	if method == nil {
+		t.Errorf("Expecting %s method to be present in %s class",
+			newMethodAge.Signature(),
+			humanType.name,
+		)
+	}
+
 	newMethodAge = *methodGetAge
 	newMethodAge.ReturnType.Name = "void"
 	newMethodAge.ParameterList = []text.Parameter{
@@ -285,7 +331,18 @@ func TestTypeAnalyzer_MethodDeclaration(t *testing.T) {
 		t.Errorf("Should be error free but got:\n %s", visitor.error[0])
 	}
 
+	humanType = visitor.table["Human"]
+	for _, sign := range []string{newMethodAge.Signature(), methodGetAge.Signature()} {
+		method := humanType.Methods[sign]
+		if method == nil {
+			t.Errorf("Expecting %s method to be present in %s class",
+				newMethodAge.Signature(),
+				humanType.name,
+			)
+		}
+	}
 }
+
 func TestTypeAnalyzer_MethodDeclaration_error(t *testing.T) {
 	//Already declared as property
 	newMethodAge := *methodGetAge

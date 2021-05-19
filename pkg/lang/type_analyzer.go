@@ -79,7 +79,6 @@ func (t *TypeAnalyzer) VisitClass(class *text.Class) {
 		if len(name) == 0 {
 			return
 		}
-
 		if !t.typeExist(name) {
 			notExistMsg(name)
 			return
@@ -96,7 +95,7 @@ func (t *TypeAnalyzer) VisitClass(class *text.Class) {
 		}
 
 		if cat == Class {
-			newClass = val
+			newClass.extends = val
 		} else {
 			newClass.implements = val
 		}
