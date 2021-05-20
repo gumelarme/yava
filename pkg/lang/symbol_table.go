@@ -1,10 +1,28 @@
 package lang
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/gumelarme/yava/pkg/text"
 )
+
+type ErrorCollector []string
+
+func (e ErrorCollector) Errors() []error {
+	errs := make([]error, len(e))
+	for i, msg := range e {
+		errs[i] = errors.New(msg)
+	}
+	return errs
+}
+
+func (e *ErrorCollector) AddError(err string) {
+	(*e) = append(*e, err)
+}
+func (e *ErrorCollector) AddErrorf(err string, i ...interface{}) {
+	(*e) = append(*e, fmt.Sprintf(err, i...))
+}
 
 type SymbolCategory int
 
@@ -69,6 +87,31 @@ func (t TypeSymbol) String() string {
 	return fmt.Sprintf("<%s>", t.name)
 }
 
+func (t *TypeSymbol) LookupProperty(name string) *PropertySymbol {
+	//FIXME: Java get the parent first, but here we get the child prop first
+	prop := t.Properties[name]
+	if prop != nil {
+		return prop
+	}
+
+	if t.extends != nil {
+		return t.extends.LookupProperty(name)
+	}
+	return nil
+}
+
+func (t *TypeSymbol) LookupMethod(signature string) *MethodSymbol {
+	method := t.Methods[signature]
+	if method != nil {
+		return method
+	}
+
+	if t.extends != nil {
+		return t.extends.LookupMethod(signature)
+	}
+	return nil
+}
+
 type DataType struct {
 	dataType *TypeSymbol
 	isArray  bool
@@ -106,6 +149,10 @@ func (f FieldSymbol) String() string {
 type PropertySymbol struct {
 	text.AccessModifier
 	FieldSymbol
+}
+
+func (p PropertySymbol) String() string {
+	return p.FieldSymbol.String()
 }
 
 type MethodSymbol struct {

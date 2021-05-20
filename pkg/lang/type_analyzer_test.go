@@ -85,8 +85,9 @@ func TestTypeAnalyzer_Class(t *testing.T) {
 	testNoError := func(doThings func(engine *TypeAnalyzer)) {
 		engine := NewTypeAnalyzer()
 		doThings(engine)
-		if len(engine.error) != 0 {
-			t.Error("Should not have any error, but got:\n", engine.error)
+		errors := engine.Errors()
+		if len(errors) != 0 {
+			t.Error("Should not have any error, but got:\n", errors[0])
 		}
 	}
 
@@ -150,8 +151,9 @@ func TestTypeAnalyzer_Class_errors(t *testing.T) {
 	testError := func(doThings func(engine *TypeAnalyzer), msg string) {
 		engine := NewTypeAnalyzer()
 		doThings(engine)
-		if engine.error[0] != msg {
-			t.Errorf("Should have an error:\n`%s`\ninstead of:\n`%s`", msg, engine.error[0])
+		errors := engine.Errors()
+		if len(errors) > 0 && errors[0].Error() != msg {
+			t.Errorf("Should have an error:\n`%s`\ninstead of:\n`%s`", msg, errors[0])
 		}
 	}
 
@@ -181,8 +183,9 @@ func TestTypeAnalyzer_Class_errors(t *testing.T) {
 func TestTypeAnalyzer_Class_alreadyDeclared(t *testing.T) {
 	engine := NewTypeAnalyzer()
 	engine.VisitClass(text.NewEmptyClass("String", "", ""))
-	if engine.error[0] != fmt.Sprintf(msgTypeAlreadyDeclared, "String") {
-		t.Errorf("Should error on duplicate type name, %s", engine.error[0])
+	errors := engine.Errors()
+	if len(errors) > 0 && errors[0].Error() != fmt.Sprintf(msgTypeAlreadyDeclared, "String") {
+		t.Errorf("Should error on duplicate type name, %s", errors[0])
 	}
 }
 
@@ -190,8 +193,9 @@ func TestTypeAnalyzer_Interface_alreadyDeclared(t *testing.T) {
 	engine := NewTypeAnalyzer()
 	engine.VisitInterface(interfaceCallable)
 	engine.VisitInterface(interfaceCallable)
-	if engine.error[0] != fmt.Sprintf(msgTypeAlreadyDeclared, interfaceCallable.Name) {
-		t.Errorf("Should error on duplicate type name, %s", engine.error[0])
+	errors := engine.Errors()
+	if len(errors) > 0 && errors[0].Error() != fmt.Sprintf(msgTypeAlreadyDeclared, interfaceCallable.Name) {
+		t.Errorf("Should error on duplicate type name, %s", errors[0])
 	}
 }
 
@@ -204,8 +208,9 @@ func TestTypeAnalyzer_AfterClass(t *testing.T) {
 	callable.Accept(engine)
 	human.Accept(engine)
 
-	if len(engine.error) != 0 {
-		t.Errorf("Expected no error, but got `%s`", engine.error[0])
+	errors := engine.Errors()
+	if len(errors) != 0 {
+		t.Errorf("Expected no error, but got `%s`", errors[0])
 	}
 
 	//reset, and add interface to human
@@ -215,7 +220,7 @@ func TestTypeAnalyzer_AfterClass(t *testing.T) {
 	human.Accept(engine)
 
 	msg := fmt.Sprintf(msgMustImplementMethod, methodGetAge.Signature())
-	if len(engine.error) == 0 {
+	if len(engine.Errors()) == 0 {
 		t.Errorf("Should have error of: %s, but got nothing", msg)
 	}
 }
@@ -266,7 +271,8 @@ func TestTypeAnalyzer_PropertyDeclaration_error(t *testing.T) {
 	visitor := NewTypeAnalyzer()
 	human.Accept(visitor)
 	msg := fmt.Sprintf(msgPropertyAlreadyDeclared, propAge.Name, human.Name)
-	if len(visitor.error) < 0 || visitor.error[0] != msg {
+	errors := visitor.Errors()
+	if len(errors) == 0 || errors[0].Error() != msg {
 		t.Errorf("Should have got error of `%s `", msg)
 	}
 
@@ -279,7 +285,9 @@ func TestTypeAnalyzer_PropertyDeclaration_error(t *testing.T) {
 	msg = fmt.Sprintf(msgTypeNotExist, "Hello")
 	visitor = NewTypeAnalyzer()
 	human.Accept(visitor)
-	if len(visitor.error) < 0 || visitor.error[0] != msg {
+
+	errors = visitor.Errors()
+	if len(errors) == 0 || errors[0].Error() != msg {
 		t.Errorf("Should have got error of `%s `", msg)
 	}
 
@@ -298,9 +306,9 @@ func TestTypeAnalyzer_MethodDeclaration(t *testing.T) {
 	human.Methods = append(human.Methods, &newMethodAge)
 	visitor := NewTypeAnalyzer()
 	human.Accept(visitor)
-
-	if len(visitor.error) > 0 {
-		t.Errorf("Should be error free but got:\n %s", visitor.error[0])
+	errors := visitor.Errors()
+	if len(errors) > 0 {
+		t.Errorf("Should be error free but got:\n %s", errors[0])
 	}
 
 	humanType := visitor.table["Human"]
@@ -326,9 +334,9 @@ func TestTypeAnalyzer_MethodDeclaration(t *testing.T) {
 	human.Methods = append(human.Methods, methodGetAge, &newMethodAge)
 	visitor = NewTypeAnalyzer()
 	human.Accept(visitor)
-
-	if len(visitor.error) > 0 {
-		t.Errorf("Should be error free but got:\n %s", visitor.error[0])
+	errors = visitor.Errors()
+	if len(errors) > 0 {
+		t.Errorf("Should be error free but got:\n %s", errors[0])
 	}
 
 	humanType = visitor.table["Human"]
@@ -355,8 +363,9 @@ func TestTypeAnalyzer_MethodDeclaration_error(t *testing.T) {
 	visitor := NewTypeAnalyzer()
 	human.Accept(visitor)
 	msg := fmt.Sprintf(msgMethodAlreadyDeclaredAsProp, newMethodAge.Name)
-	if len(visitor.error) == 0 || visitor.error[0] != msg {
-		t.Errorf("Should have got error of :\n\t%s \nbut got: \n%s", msg, visitor.error[0])
+	errors := visitor.Errors()
+	if len(errors) == 0 || errors[0].Error() != msg {
+		t.Errorf("Should have got error of :\n\t%s \nbut got: \n%s", msg, errors[0])
 	}
 
 	// duplicate method
@@ -366,7 +375,9 @@ func TestTypeAnalyzer_MethodDeclaration_error(t *testing.T) {
 	human.Accept(visitor)
 
 	msg = fmt.Sprintf(msgMethodIsAlreadyDeclared, methodGetAge.Signature())
-	if len(visitor.error) == 0 || visitor.error[0] != msg {
+
+	errors = visitor.Errors()
+	if len(errors) == 0 || errors[0].Error() != msg {
 		t.Errorf("Should have got error of :\n\t%s \n", msg)
 	}
 
@@ -378,7 +389,9 @@ func TestTypeAnalyzer_MethodDeclaration_error(t *testing.T) {
 	visitor = NewTypeAnalyzer()
 	human.Accept(visitor)
 	msg = fmt.Sprintf(msgTypeNotExist, newMethodAge.ReturnType.Name)
-	if len(visitor.error) == 0 || visitor.error[0] != msg {
+
+	errors = visitor.Errors()
+	if len(errors) == 0 || errors[0].Error() != msg {
 		t.Errorf("Should have got error of :\n\t%s", msg)
 	}
 
@@ -395,7 +408,9 @@ func TestTypeAnalyzer_MethodDeclaration_error(t *testing.T) {
 	visitor = NewTypeAnalyzer()
 	human.Accept(visitor)
 	msg = fmt.Sprintf(msgTypeNotExist, newMethodAge.ParameterList[0].Name)
-	if len(visitor.error) == 0 || visitor.error[0] != msg {
+
+	errors = visitor.Errors()
+	if len(errors) == 0 || errors[0].Error() != msg {
 		t.Errorf("Should have got error of :\n\t%s", msg)
 	}
 }

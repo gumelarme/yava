@@ -1,9 +1,6 @@
 package lang
 
 import (
-	"errors"
-	"fmt"
-
 	"github.com/gumelarme/yava/pkg/text"
 )
 
@@ -18,14 +15,25 @@ var (
 	msgMethodIsAlreadyDeclared      = "Method %s is already exist."
 )
 
+type TypeTable map[string]*TypeSymbol
+
+func (t TypeTable) Lookup(name string) *TypeSymbol {
+	val, exist := t[name]
+	if !exist {
+		return nil
+	}
+	return val
+}
+
 type TypeAnalyzer struct {
+	ErrorCollector
 	current *TypeSymbol
-	table   map[string]*TypeSymbol
-	error   []string
+	table   TypeTable
 }
 
 func NewTypeAnalyzer() *TypeAnalyzer {
 	return &TypeAnalyzer{
+		make([]string, 0),
 		nil,
 		map[string]*TypeSymbol{
 			"int":     NewType("int", Primitive),
@@ -33,26 +41,11 @@ func NewTypeAnalyzer() *TypeAnalyzer {
 			"char":    NewType("char", Primitive),
 			"String":  NewType("String", Class),
 		},
-		make([]string, 0),
 	}
 }
 
-func (t *TypeAnalyzer) Errors() []error {
-	errs := make([]error, len(t.error))
-	for i, msg := range t.error {
-		errs[i] = errors.New(msg)
-	}
-	return errs
-}
 func (t *TypeAnalyzer) GetTypeTable() map[string]*TypeSymbol {
 	return t.table
-}
-
-func (t *TypeAnalyzer) addError(err string) {
-	t.error = append(t.error, err)
-}
-func (t *TypeAnalyzer) addErrorf(err string, i ...interface{}) {
-	t.error = append(t.error, fmt.Sprintf(err, i...))
 }
 
 func (t *TypeAnalyzer) VisitProgram(program text.Program) {}
@@ -66,11 +59,11 @@ func (t *TypeAnalyzer) typeExist(name string) bool {
 //fix it
 func (t *TypeAnalyzer) VisitClass(class *text.Class) {
 	notExistMsg := func(name string) {
-		t.addErrorf(msgTypeNotExist, name)
+		t.AddErrorf(msgTypeNotExist, name)
 	}
 
 	if _, exist := t.table[class.Name]; exist {
-		t.addErrorf(msgTypeAlreadyDeclared, class.Name)
+		t.AddErrorf(msgTypeAlreadyDeclared, class.Name)
 		return
 	}
 
@@ -90,7 +83,7 @@ func (t *TypeAnalyzer) VisitClass(class *text.Class) {
 			if cat == Interface {
 				msg = msgImplementShouldBeOnInterface
 			}
-			t.addError(msg)
+			t.AddError(msg)
 			return
 		}
 
@@ -119,14 +112,14 @@ func (t *TypeAnalyzer) VisitAfterClass(class *text.Class) {
 	for key := range inf.Methods {
 		_, exist := t.current.Methods[key]
 		if !exist {
-			t.addErrorf(msgMustImplementMethod, key)
+			t.AddErrorf(msgMustImplementMethod, key)
 		}
 	}
 }
 
 func (t *TypeAnalyzer) VisitInterface(inf *text.Interface) {
 	if _, exist := t.table[inf.Name]; exist {
-		t.addErrorf(msgTypeAlreadyDeclared, inf.Name)
+		t.AddErrorf(msgTypeAlreadyDeclared, inf.Name)
 		return
 	}
 
@@ -136,12 +129,12 @@ func (t *TypeAnalyzer) VisitInterface(inf *text.Interface) {
 
 func (t *TypeAnalyzer) VisitPropertyDeclaration(prop *text.PropertyDeclaration) {
 	if !t.typeExist(prop.Type.Name) {
-		t.addErrorf(msgTypeNotExist, prop.Type.Name)
+		t.AddErrorf(msgTypeNotExist, prop.Type.Name)
 		return
 	}
 
 	if _, isExist := t.current.Properties[prop.Name]; isExist {
-		t.addErrorf(msgPropertyAlreadyDeclared, prop.Name, t.current.name)
+		t.AddErrorf(msgPropertyAlreadyDeclared, prop.Name, t.current.name)
 		return
 	}
 
@@ -158,15 +151,15 @@ func (t *TypeAnalyzer) VisitMethodSignature(signature *text.MethodSignature) {
 	var typeof *TypeSymbol
 
 	if _, exist := t.current.Properties[signature.Name]; exist {
-		t.addErrorf(msgMethodAlreadyDeclaredAsProp, signature.Name)
+		t.AddErrorf(msgMethodAlreadyDeclaredAsProp, signature.Name)
 	} else if _, exist := t.current.Methods[signature.Signature()]; exist {
-		t.addErrorf(msgMethodIsAlreadyDeclared, signature.Signature())
+		t.AddErrorf(msgMethodIsAlreadyDeclared, signature.Signature())
 	}
 
 	if signature.ReturnType.Name == "void" {
 		typeof = NewType("void", Primitive)
 	} else if !t.typeExist(signature.ReturnType.Name) {
-		t.addErrorf(msgTypeNotExist, signature.ReturnType.Name)
+		t.AddErrorf(msgTypeNotExist, signature.ReturnType.Name)
 		return
 	} else {
 		typeof = t.table[signature.ReturnType.Name]
@@ -175,7 +168,7 @@ func (t *TypeAnalyzer) VisitMethodSignature(signature *text.MethodSignature) {
 	parameters := make([]*FieldSymbol, len(signature.ParameterList))
 	for i, param := range signature.ParameterList {
 		if !t.typeExist(param.Type.Name) {
-			t.addErrorf(msgTypeNotExist, param.Name)
+			t.AddErrorf(msgTypeNotExist, param.Name)
 			continue
 		}
 
