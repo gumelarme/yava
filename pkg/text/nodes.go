@@ -16,22 +16,35 @@ type Visitor interface {
 	VisitPropertyDeclaration(*PropertyDeclaration)
 	VisitMethodSignature(*MethodSignature)
 	VisitMethodDeclaration(*MethodDeclaration)
+	VisitAfterMethodDeclaration(*MethodDeclaration)
 	VisitVariableDeclaration(*VariableDeclaration)
+	VisitAfterVariableDeclaration(*VariableDeclaration)
 	VisitStatementList(StatementList)
 	VisitAfterStatementList()
 	VisitSwitchStatement(*SwitchStatement)
+	VisitSwitchCase(*CaseStatement)
+	VisitAfterSwitchStatement(*SwitchStatement)
 	VisitIfStatement(*IfStatement)
+	VisitAfterIfStatementCondition(*IfStatement)
 	VisitForStatement(*ForStatement)
+	VisitAfterForStatementCondition(*ForStatement)
 	VisitWhileStatement(*WhileStatement)
+	VisitAfterWhileStatementCondition(*WhileStatement)
 	VisitAssignmentStatement(*AssignmentStatement)
+	VisitAfterAssignmentStatement(*AssignmentStatement)
 	VisitJumpStatement(*JumpStatement)
+	VisitAfterJumpStatement(*JumpStatement)
 	VisitFieldAccess(*FieldAccess)
 	VisitArrayAccess(*ArrayAccess)
+	VisitAfterArrayAccess(*ArrayAccess)
 	VisitArrayAccessDelegate(NamedValue)
 	VisitMethodCall(*MethodCall)
+	VisitAfterMethodCall(*MethodCall)
 	VisitArrayCreation(*ArrayCreation)
+	VisitAfterArrayCreation(*ArrayCreation)
 	VisitObjectCreation(*ObjectCreation)
 	VisitBinOp(*BinOp)
+	VisitAfterBinOp(*BinOp)
 	VisitConstant(Expression)
 }
 
@@ -127,7 +140,7 @@ func NumFromStr(str string) Num {
 }
 
 func (n Num) NodeContent() (string, string) {
-	return "num", fmt.Sprintf("%d", int(n))
+	return "int", fmt.Sprintf("%d", int(n))
 }
 
 func (n Num) ChildNode() INode {
@@ -218,7 +231,7 @@ func (c Char) Accept(v Visitor) {
 type String string
 
 func (s String) NodeContent() (string, string) {
-	return "string", fmt.Sprintf("%#v", s)
+	return "String", fmt.Sprintf("%#v", s)
 }
 func (String) ChildNode() INode {
 	return nil
@@ -259,6 +272,7 @@ func (t *This) IsExpression() bool {
 //FIXME: do something to this
 func (t *This) Accept(v Visitor) {
 	v.VisitConstant(t)
+	t.Child.Accept(v)
 }
 
 type FieldAccess struct {
@@ -330,6 +344,7 @@ func (a *ArrayAccess) Accept(v Visitor) {
 	if a.Child != nil {
 		a.Child.Accept(v)
 	}
+	v.VisitAfterArrayAccess(a)
 }
 
 type MethodCall struct {
@@ -366,6 +381,7 @@ func (m *MethodCall) Accept(v Visitor) {
 
 	}
 
+	v.VisitAfterMethodCall(m)
 	if m.Child == nil {
 		return
 	}
@@ -421,11 +437,17 @@ func (b *BinOp) Accept(v Visitor) {
 	v.VisitBinOp(b)
 	b.Left.Accept(v)
 	b.Right.Accept(v)
+	v.VisitAfterBinOp(b)
 }
 
 //TODO: create proper object creation struct
 type ObjectCreation struct {
 	MethodCall
+}
+
+func (o *ObjectCreation) Accept(visitor Visitor) {
+	visitor.VisitObjectCreation(o)
+	visitor.VisitAfterMethodCall(&o.MethodCall)
 }
 
 func (o *ObjectCreation) NodeContent() (string, string) {
@@ -454,6 +476,7 @@ func (a *ArrayCreation) IsExpression() bool {
 func (a *ArrayCreation) Accept(v Visitor) {
 	v.VisitArrayCreation(a)
 	a.Length.Accept(v)
+	v.VisitAfterArrayCreation(a)
 }
 
 type Statement interface {
@@ -541,6 +564,7 @@ func (j *JumpStatement) Accept(v Visitor) {
 	if j.Exp != nil {
 		j.Exp.Accept(v)
 	}
+	v.VisitAfterJumpStatement(j)
 }
 
 type AssignmentStatement struct {
@@ -575,6 +599,7 @@ func (a *AssignmentStatement) Accept(v Visitor) {
 	v.VisitAssignmentStatement(a)
 	a.Left.Accept(v)
 	a.Right.Accept(v)
+	v.VisitAfterAssignmentStatement(a)
 }
 
 type CaseStatement struct {
@@ -636,9 +661,11 @@ func (s *SwitchStatement) IsStatement() bool {
 }
 
 func (s *SwitchStatement) Accept(v Visitor) {
+	s.ValueToCompare.Accept(v)
 	v.VisitSwitchStatement(s)
 	for _, c := range s.CaseList {
 		c.Value.Accept(v)
+		v.VisitSwitchCase(c)
 		c.StatementList.Accept(v)
 	}
 
@@ -677,6 +704,7 @@ func (i *IfStatement) IsStatement() bool {
 func (i *IfStatement) Accept(v Visitor) {
 	v.VisitIfStatement(i)
 	i.Condition.Accept(v)
+	v.VisitAfterIfStatementCondition(i)
 	i.Body.Accept(v)
 
 	if i.Else != nil {
@@ -707,6 +735,7 @@ func (w *WhileStatement) Accept(v Visitor) {
 	v.VisitWhileStatement(w)
 	if w.Condition != nil {
 		w.Condition.Accept(v)
+		v.VisitAfterWhileStatementCondition(w)
 	}
 	w.Body.Accept(v)
 }
@@ -759,6 +788,7 @@ func (varDecl *VariableDeclaration) Accept(v Visitor) {
 	if varDecl.Value != nil {
 		varDecl.Value.Accept(v)
 	}
+	v.VisitAfterVariableDeclaration(varDecl)
 }
 
 type ForStatement struct {
@@ -806,10 +836,16 @@ func (f *ForStatement) Accept(v Visitor) {
 	v.VisitForStatement(f)
 	if f.Init != nil {
 		f.Init.Accept(v)
+		defer func() {
+			if name, _ := f.Init.NodeContent(); name == "var-decl" {
+				v.VisitAfterStatementList()
+			}
+		}()
 	}
 
 	if f.Condition != nil {
 		f.Condition.Accept(v)
+		v.VisitAfterForStatementCondition(f)
 	}
 
 	if f.Update != nil {
@@ -818,9 +854,6 @@ func (f *ForStatement) Accept(v Visitor) {
 
 	f.Body.Accept(v)
 
-	if name, _ := f.Init.NodeContent(); name == "var-decl" {
-		v.VisitAfterStatementList()
-	}
 }
 
 // ----------------- END OF STATEMENTS
@@ -854,9 +887,9 @@ type Declaration interface {
 type AccessModifier int
 
 const (
-	Public AccessModifier = iota
-	Protected
-	Private
+	Public    AccessModifier = 1
+	Protected                = 2
+	Private                  = 4
 )
 
 func (a AccessModifier) String() string {
@@ -864,7 +897,7 @@ func (a AccessModifier) String() string {
 		"public",
 		"protected",
 		"private",
-	}[a]
+	}[a>>1]
 }
 
 type PropertyDeclaration struct {
@@ -1018,6 +1051,7 @@ func (m *MethodDeclaration) Accept(v Visitor) {
 	m.MethodSignature.Accept(v)
 	v.VisitMethodDeclaration(m)
 	m.Body.Accept(v)
+	v.VisitAfterMethodDeclaration(m)
 }
 
 type MainMethodDeclaration struct {

@@ -124,25 +124,32 @@ func (d DataType) String() string {
 	}
 	return str
 }
+func (d DataType) Name() string {
+	return d.dataType.name
+}
+
+func (d DataType) Equals(val DataType) bool {
+	return d.isArray == val.isArray && d.dataType.name == val.dataType.name
+}
 
 type FieldSymbol struct {
 	DataType
 	name string
 }
 
-func (f FieldSymbol) Name() string {
+func (f *FieldSymbol) Name() string {
 	return f.name
 }
 
-func (f FieldSymbol) Type() DataType {
+func (f *FieldSymbol) Type() DataType {
 	return f.DataType
 }
 
-func (f FieldSymbol) Category() SymbolCategory {
+func (f *FieldSymbol) Category() SymbolCategory {
 	return Field
 }
 
-func (f FieldSymbol) String() string {
+func (f *FieldSymbol) String() string {
 	return fmt.Sprintf("%s: %s", f.dataType, f.name)
 }
 
@@ -159,7 +166,7 @@ type MethodSymbol struct {
 	DataType
 	accessMod text.AccessModifier
 	name      string
-	parameter []*FieldSymbol
+	signature string
 }
 
 func NewMethodSymbol(signature text.MethodSignature, returnType TypeSymbol) *MethodSymbol {
@@ -170,30 +177,31 @@ func NewMethodSymbol(signature text.MethodSignature, returnType TypeSymbol) *Met
 		},
 		signature.AccessModifier,
 		signature.Name,
-		nil,
+		signature.Signature(),
 	}
 }
 
-func (m MethodSymbol) Name() string {
-	return m.name
+func (m *MethodSymbol) Name() string {
+	return m.signature
 }
 
-func (m MethodSymbol) Type() DataType {
+func (m *MethodSymbol) Type() DataType {
 	return m.DataType
 }
 
-func (m MethodSymbol) Category() SymbolCategory {
+func (m *MethodSymbol) Category() SymbolCategory {
 	return Method
 }
 
-func (m MethodSymbol) String() string {
-	return fmt.Sprintf("%s %s()", m.DataType, m.name)
+func (m *MethodSymbol) String() string {
+	// return fmt.Sprintf("%s(%s)", m.dataType)
+	return m.signature
 }
 
 type SymbolTable struct {
 	name      string
 	level     int
-	table     map[string]Symbol
+	table     map[string]TypeMember
 	parent    *SymbolTable
 	isVerbose bool
 }
@@ -202,13 +210,13 @@ func NewSymbolTable(name string, level int, parent *SymbolTable) SymbolTable {
 	return SymbolTable{
 		name,
 		level,
-		make(map[string]Symbol),
+		make(map[string]TypeMember),
 		parent,
 		true,
 	}
 }
 
-func (s *SymbolTable) Insert(sym Symbol) {
+func (s *SymbolTable) Insert(sym TypeMember) {
 	s.table[sym.Name()] = sym
 
 	if s.isVerbose {
@@ -216,7 +224,7 @@ func (s *SymbolTable) Insert(sym Symbol) {
 	}
 }
 
-func (s *SymbolTable) Lookup(name string) Symbol {
+func (s *SymbolTable) Lookup(name string, deep bool) TypeMember {
 	if s.isVerbose {
 		fmt.Printf("Lookup %s @%s\n", name, s.name)
 	}
@@ -225,8 +233,8 @@ func (s *SymbolTable) Lookup(name string) Symbol {
 		return val
 	}
 
-	if s.parent != nil {
-		return s.parent.Lookup(name)
+	if s.parent != nil && deep {
+		return s.parent.Lookup(name, deep)
 	}
 
 	return nil

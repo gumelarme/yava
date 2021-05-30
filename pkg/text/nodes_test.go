@@ -61,12 +61,12 @@ func TestArrayAccess_PrettyPrint(t *testing.T) {
 	}{
 		{
 			&FieldAccess{"page", &ArrayAccess{Num(1), nil}},
-			"(#field page (#array :at (#num 1)))",
+			"(#field page (#array :at (#int 1)))",
 		},
 
 		{
 			&FieldAccess{"page", &ArrayAccess{Num(0), &FieldAccess{"name", nil}}},
-			"(#field page (#array :at (#num 0) (#field name)))",
+			"(#field page (#array :at (#int 0) (#field name)))",
 		},
 	}
 
@@ -84,7 +84,7 @@ func TestMethodCall_PrettyPrint(t *testing.T) {
 	}{
 		{
 			&MethodCall{"somemethod", []Expression{Num(1), Num(2)}, nil},
-			"(#method-call somemethod :args [(#num 1), (#num 2)])",
+			"(#method-call somemethod :args [(#int 1), (#int 2)])",
 		},
 		{
 			&MethodCall{"somemethod", []Expression{}, &FieldAccess{"page", nil}},
@@ -92,7 +92,7 @@ func TestMethodCall_PrettyPrint(t *testing.T) {
 		},
 		{
 			&MethodCall{"somemethod", []Expression{}, &ArrayAccess{Num(1), nil}},
-			"(#method-call somemethod :args [] (#array :at (#num 1)))",
+			"(#method-call somemethod :args [] (#array :at (#int 1)))",
 		},
 
 		{
@@ -113,13 +113,13 @@ func TestBasicType_PrettyPrint(t *testing.T) {
 		str string
 		obj Expression
 	}{
-		{`(#num 123)`, NumFromStr("123")},
+		{`(#int 123)`, NumFromStr("123")},
 		{`(#boolean true)`, NewBoolean("true")},
 		{`(#boolean false)`, NewBoolean("false")},
 		{`(#char 'c')`, NewChar("c")},
 		{`(#char '你')`, NewChar("你")},
-		{`(#string "Hello")`, String("Hello")},
-		{`(#string "Hello \"Bro\"")`, String(`Hello "Bro"`)},
+		{`(#String "Hello")`, String("Hello")},
+		{`(#String "Hello \"Bro\"")`, String(`Hello "Bro"`)},
 	}
 
 	for _, d := range data {
@@ -154,11 +154,11 @@ func TestCaseStatement_String(t *testing.T) {
 		node CaseStatement
 	}{
 		{
-			"(#case (#num 12) :do [])",
+			"(#case (#int 12) :do [])",
 			CaseStatement{Num(12), []Statement{}},
 		},
 		{
-			"(#case (#num 12) :do [(#return)])",
+			"(#case (#int 12) :do [(#return)])",
 			CaseStatement{Num(12), []Statement{&JumpStatement{ReturnJump, nil}}},
 		},
 		{
@@ -179,7 +179,7 @@ func TestSwitchStatement_PrettyPrint(t *testing.T) {
 		node *SwitchStatement
 	}{
 		{
-			"(#switch (#field age) :case [(#case (#num 12) :do [(#return)])])",
+			"(#switch (#field age) :case [(#case (#int 12) :do [(#return)])])",
 			&SwitchStatement{&FieldAccess{"age", nil},
 				[]*CaseStatement{
 					{Num(12), []Statement{&JumpStatement{ReturnJump, nil}}},
@@ -212,11 +212,11 @@ func TestIfStatement_PrettyPrint(t *testing.T) {
 			IfStatement{&FieldAccess{"name", nil}, &JumpStatement{ReturnJump, nil}, nil},
 		},
 		{
-			"(#if (#field name) :body (#return) :else (#return (#num 1)))",
+			"(#if (#field name) :body (#return) :else (#return (#int 1)))",
 			IfStatement{&FieldAccess{"name", nil}, &JumpStatement{ReturnJump, nil}, &JumpStatement{ReturnJump, Num(1)}},
 		},
 		{
-			"(#if (#field name) :body (#stmt-block (#if (#field what) :body (#return))) :else (#return (#num 1)))",
+			"(#if (#field name) :body (#stmt-block (#if (#field what) :body (#return))) :else (#return (#int 1)))",
 			IfStatement{&FieldAccess{"name", nil},
 				&StatementList{
 					&IfStatement{&FieldAccess{"what", nil}, &JumpStatement{ReturnJump, nil}, nil},

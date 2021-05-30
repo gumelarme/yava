@@ -48,15 +48,16 @@ func TestNameAnalyzer_MethodSignature(t *testing.T) {
 
 	withTypeAnal(&human, func(nameAnal *NameAnalyzer) {
 		expectName := "method-getAge(int)_2"
-		if nameAnal.scope.level != 2 || nameAnal.scope.name != expectName {
+		scope := nameAnal.Tables[1]
+		if scope.level != 2 || scope.name != expectName {
 			t.Errorf("VisitMethodSignature should result in new scope but got: %s:%d",
 				nameAnal.scope.name,
 				nameAnal.scope.level,
 			)
 		}
 
-		param := nameAnal.scope.Lookup("what").(FieldSymbol)
-		if len(nameAnal.scope.table) == 0 {
+		param := scope.Lookup("what", true).(*FieldSymbol)
+		if len(scope.table) == 0 {
 			t.Errorf("MethodSignature should introduce new field from parameter inside a new scope")
 		}
 
@@ -106,11 +107,12 @@ func TestNameAnalyzer_VariableDeclaration(t *testing.T) {
 	})
 
 	withTypeAnal(&human, func(nameAnal *NameAnalyzer) {
-		if len(nameAnal.scope.table) == 0 {
+		scope := nameAnal.Tables[1]
+		if len(scope.table) == 0 {
 			t.Error("Variable 'int realAge' should exist after visiting VariableDeclaration.")
 		}
 
-		variable := nameAnal.scope.Lookup("realAge").(FieldSymbol)
+		variable := scope.Lookup("realAge", true).(*FieldSymbol)
 		if variable.Name() != "realAge" ||
 			variable.dataType.name != "int" ||
 			variable.isArray != true {
@@ -171,16 +173,18 @@ func TestNameAnalyzer_ForStatement(t *testing.T) {
 
 	withTypeAnal(&human, func(nameAnal *NameAnalyzer) {
 		expect := "for-scope-2_3"
-		if nameAnal.scope.name != expect {
-			t.Errorf("Expecting scope name of `%s` but got `%s`", expect, nameAnal.scope.name)
+		scope := nameAnal.Tables[2]
+		if scope.name != expect {
+			t.Errorf("Expecting scope name of `%s` but got `%s`", expect, scope.name)
 		}
 	})
 
 	forStmt.Init = nil
 	withTypeAnal(&human, func(nameAnal *NameAnalyzer) {
 		expect := "method-getAge()_2"
-		if nameAnal.scope.name != expect {
-			t.Errorf("Expecting scope name of `%s` but got `%s`", expect, nameAnal.scope.name)
+		scope := nameAnal.Tables[1]
+		if scope.name != expect {
+			t.Errorf("Expecting scope name of `%s` but got `%s`", expect, scope.name)
 		}
 	})
 

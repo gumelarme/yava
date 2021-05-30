@@ -1,6 +1,9 @@
 package lang
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/gumelarme/yava/pkg/text"
 )
 
@@ -36,6 +39,7 @@ func NewTypeAnalyzer() *TypeAnalyzer {
 		make([]string, 0),
 		nil,
 		map[string]*TypeSymbol{
+			"null":    NewType("null", Primitive),
 			"int":     NewType("int", Primitive),
 			"boolean": NewType("boolean", Primitive),
 			"char":    NewType("char", Primitive),
@@ -102,7 +106,7 @@ func (t *TypeAnalyzer) VisitClass(class *text.Class) {
 
 }
 func (t *TypeAnalyzer) VisitAfterClass(class *text.Class) {
-
+	t.addConstructorIfEmpty(class.Name)
 	inf := t.current.implements
 	if inf == nil {
 		return
@@ -115,6 +119,24 @@ func (t *TypeAnalyzer) VisitAfterClass(class *text.Class) {
 			t.AddErrorf(msgMustImplementMethod, key)
 		}
 	}
+}
+
+func (t *TypeAnalyzer) addConstructorIfEmpty(name string) {
+	for key := range t.table[name].Methods {
+		fmt.Println("I Have", key)
+		if strings.HasPrefix(key, name+"(") {
+			return
+		}
+	}
+
+	signature := name + "()"
+	t.table[name].Methods[signature] = &MethodSymbol{
+		DataType{t.table[name], false},
+		text.Public,
+		name,
+		signature,
+	}
+
 }
 
 func (t *TypeAnalyzer) VisitInterface(inf *text.Interface) {
@@ -185,25 +207,38 @@ func (t *TypeAnalyzer) VisitMethodSignature(signature *text.MethodSignature) {
 		DataType{typeof, signature.ReturnType.IsArray},
 		signature.AccessModifier,
 		signature.Name,
-		parameters,
+		signature.Signature(),
 	}
 }
 
-func (t *TypeAnalyzer) VisitMethodDeclaration(*text.MethodDeclaration)     {}
-func (t *TypeAnalyzer) VisitVariableDeclaration(*text.VariableDeclaration) {}
-func (t *TypeAnalyzer) VisitStatementList(text.StatementList)              {}
-func (t *TypeAnalyzer) VisitAfterStatementList()                           {}
-func (t *TypeAnalyzer) VisitSwitchStatement(*text.SwitchStatement)         {}
-func (t *TypeAnalyzer) VisitIfStatement(*text.IfStatement)                 {}
-func (t *TypeAnalyzer) VisitForStatement(*text.ForStatement)               {}
-func (t *TypeAnalyzer) VisitWhileStatement(*text.WhileStatement)           {}
-func (t *TypeAnalyzer) VisitAssignmentStatement(*text.AssignmentStatement) {}
-func (t *TypeAnalyzer) VisitJumpStatement(*text.JumpStatement)             {}
-func (t *TypeAnalyzer) VisitFieldAccess(*text.FieldAccess)                 {}
-func (t *TypeAnalyzer) VisitArrayAccess(*text.ArrayAccess)                 {}
-func (t *TypeAnalyzer) VisitArrayAccessDelegate(text.NamedValue)           {}
-func (t *TypeAnalyzer) VisitMethodCall(*text.MethodCall)                   {}
-func (t *TypeAnalyzer) VisitArrayCreation(*text.ArrayCreation)             {}
-func (t *TypeAnalyzer) VisitObjectCreation(*text.ObjectCreation)           {}
-func (t *TypeAnalyzer) VisitBinOp(*text.BinOp)                             {}
-func (t *TypeAnalyzer) VisitConstant(text.Expression)                      {}
+func (t *TypeAnalyzer) VisitMethodDeclaration(*text.MethodDeclaration)          {}
+func (t *TypeAnalyzer) VisitAfterMethodDeclaration(*text.MethodDeclaration)     {}
+func (t *TypeAnalyzer) VisitVariableDeclaration(*text.VariableDeclaration)      {}
+func (t *TypeAnalyzer) VisitAfterVariableDeclaration(*text.VariableDeclaration) {}
+func (t *TypeAnalyzer) VisitStatementList(text.StatementList)                   {}
+func (t *TypeAnalyzer) VisitAfterStatementList()                                {}
+func (t *TypeAnalyzer) VisitSwitchStatement(*text.SwitchStatement)              {}
+func (t *TypeAnalyzer) VisitAfterSwitchStatement(*text.SwitchStatement)         {}
+func (t *TypeAnalyzer) VisitSwitchCase(*text.CaseStatement)                     {}
+func (t *TypeAnalyzer) VisitIfStatement(*text.IfStatement)                      {}
+func (t *TypeAnalyzer) VisitAfterIfStatementCondition(*text.IfStatement)        {}
+func (t *TypeAnalyzer) VisitForStatement(*text.ForStatement)                    {}
+func (t *TypeAnalyzer) VisitAfterForStatementCondition(*text.ForStatement)      {}
+func (t *TypeAnalyzer) VisitWhileStatement(*text.WhileStatement)                {}
+func (t *TypeAnalyzer) VisitAfterWhileStatementCondition(*text.WhileStatement)  {}
+func (t *TypeAnalyzer) VisitAssignmentStatement(*text.AssignmentStatement)      {}
+func (t *TypeAnalyzer) VisitAfterAssignmentStatement(*text.AssignmentStatement) {}
+func (t *TypeAnalyzer) VisitJumpStatement(*text.JumpStatement)                  {}
+func (t *TypeAnalyzer) VisitAfterJumpStatement(*text.JumpStatement)             {}
+func (t *TypeAnalyzer) VisitFieldAccess(*text.FieldAccess)                      {}
+func (t *TypeAnalyzer) VisitArrayAccess(*text.ArrayAccess)                      {}
+func (t *TypeAnalyzer) VisitAfterArrayAccess(*text.ArrayAccess)                 {}
+func (t *TypeAnalyzer) VisitArrayAccessDelegate(text.NamedValue)                {}
+func (t *TypeAnalyzer) VisitMethodCall(*text.MethodCall)                        {}
+func (t *TypeAnalyzer) VisitAfterMethodCall(*text.MethodCall)                   {}
+func (t *TypeAnalyzer) VisitArrayCreation(*text.ArrayCreation)                  {}
+func (t *TypeAnalyzer) VisitAfterArrayCreation(*text.ArrayCreation)             {}
+func (t *TypeAnalyzer) VisitObjectCreation(*text.ObjectCreation)                {}
+func (t *TypeAnalyzer) VisitBinOp(*text.BinOp)                                  {}
+func (t *TypeAnalyzer) VisitAfterBinOp(*text.BinOp)                             {}
+func (t *TypeAnalyzer) VisitConstant(text.Expression)                           {}
