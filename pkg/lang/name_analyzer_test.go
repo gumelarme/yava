@@ -8,11 +8,72 @@ import (
 )
 
 var (
-	mockTypeTable TypeTable
+	mockNull    DataType
+	mockInt     DataType
+	mockBoolean DataType
+	mockChar    DataType
+	mockString  DataType
+	mockHuman   DataType
+	mockPerson  DataType
 )
 
 func init() {
-	mockTypeTable = NewTypeAnalyzer().table
+	mockNull = DataType{PrimitiveNull, false}
+	mockInt = DataType{PrimitiveInt, false}
+	mockBoolean = DataType{PrimitiveBoolean, false}
+	mockChar = DataType{PrimitiveChar, false}
+	mockString = DataType{PrimitiveString, false}
+
+	humanClass := NewType("Human", Class)
+	humanClass.Properties["age"] = &PropertySymbol{
+		text.Public,
+		FieldSymbol{
+			DataType{PrimitiveInt, false},
+			"age",
+		},
+	}
+	mockHuman = DataType{humanClass, false}
+
+	personClass := NewType("Person", Class)
+	mockPerson = DataType{personClass, false}
+}
+
+func getMockTypeTable(templates ...text.Template) TypeTable {
+	program := make(text.Program, len(templates))
+	for i, t := range templates {
+		program[i] = t
+	}
+
+	typeAnalyzer := NewTypeAnalyzer()
+	program.Accept(typeAnalyzer)
+	return typeAnalyzer.table
+}
+
+func TestTypeStack(t *testing.T) {
+	var stack TypeStack
+	stack.Push(mockInt)
+
+	if len(stack) != 1 {
+		t.Errorf("There should be 1 item in stack, but got %d instead", len(stack))
+	}
+
+	typeof, err := stack.Pop()
+	if typeof == (DataType{}) || err != nil {
+		t.Errorf("There should be 1 item in stack, but got nil")
+	}
+
+	typeof, err = stack.Pop()
+	if typeof != (DataType{}) || err == nil {
+		t.Errorf("There should be 0 item in stack, but got %s", typeof)
+	}
+
+	stack.Push(mockInt)
+	stack.Overwrite(mockHuman)
+	typeof, _ = stack.Pop()
+
+	if typeof != mockHuman {
+		t.Errorf("Item is not overwritten, got %s instead of %s", typeof, mockHuman)
+	}
 }
 
 func withTypeAnal(node text.INode, doThings func(nameAnal *NameAnalyzer)) {
@@ -67,8 +128,8 @@ func TestNameAnalyzer_MethodSignature(t *testing.T) {
 			t.Errorf("Parameter is not equal as the method signature. ")
 		}
 	})
-
 }
+
 func TestNameAnalyzer_MethodSignature_error(t *testing.T) {
 	human := *classHuman
 	newMethodGetAge := *methodGetAge
@@ -108,11 +169,16 @@ func TestNameAnalyzer_VariableDeclaration(t *testing.T) {
 
 	withTypeAnal(&human, func(nameAnal *NameAnalyzer) {
 		scope := nameAnal.Tables[1]
-		if len(scope.table) == 0 {
+		if len(scope.table) < 2 {
 			t.Error("Variable 'int realAge' should exist after visiting VariableDeclaration.")
 		}
 
-		variable := scope.Lookup("realAge", true).(*FieldSymbol)
+		sym := scope.Lookup("realAge", true)
+		if sym == nil {
+			t.Error("Variable 'int realAge' is not exist")
+		}
+
+		variable := sym.(*FieldSymbol)
 		if variable.Name() != "realAge" ||
 			variable.dataType.name != "int" ||
 			variable.isArray != true {
@@ -120,6 +186,36 @@ func TestNameAnalyzer_VariableDeclaration(t *testing.T) {
 		}
 	})
 }
+
+// func withNameAnalyzerFromText(content string, do func(*NameAnalyzer, text.Program)) {
+// 	lex := text.NewLexer(text.NewStringScanner(content))
+// 	parser := text.NewParser(&lex)
+// 	ast := parser.Compile()
+
+// 	typeAnalyzer := NewTypeAnalyzer()
+// 	ast.Accept(typeAnalyzer)
+
+// 	nameAnalyzer := NewNameAnalyzer(typeAnalyzer.table)
+// 	do(nameAnalyzer, ast)
+// }
+
+// func TestNameAnalyzer_VariableDeclaration_badType(t *testing.T) {
+// 	template := `
+// class Person {
+// 	public int a;
+// 	public int getA(){
+// 		%s
+// 	}
+// }
+// `
+// 	content := fmt.Sprintf(template, "int a = 3 + 3;")
+// 	withNameAnalyzerFromText(content, func(nameAnalyzer *NameAnalyzer, program text.Program) {
+// 		class := program[0].(*text.Class)
+// 		nameAnalyzer.VisitClass(class)
+// 		nameAnalyzer.VisitMethodSignature(&class.MainMethod.MethodSignature)
+// 		nameAnalyzer.VisitAfterClass(class)
+// 	})
+// }
 
 func TestNameAnalyzer_VariableDeclaration_error(t *testing.T) {
 	checkHasError := func(class *text.Class, errorMsg string) {
@@ -187,5 +283,185 @@ func TestNameAnalyzer_ForStatement(t *testing.T) {
 			t.Errorf("Expecting scope name of `%s` but got `%s`", expect, scope.name)
 		}
 	})
+}
 
+func TestNameAnalyzer_VisitBinOp(t *testing.T) {
+	data := []struct {
+		tokens      []text.TokenType
+		result      DataType
+		operandType []DataType
+	}{
+		{
+			[]text.TokenType{text.Addition, text.Subtraction, text.Multiplication, text.Division, text.Modulus},
+			mockInt,
+			[]DataType{mockInt, mockInt},
+		},
+		{
+			[]text.TokenType{text.GreaterThan, text.GreaterThanEqual, text.LessThan, text.LessThanEqual},
+			mockBoolean,
+			[]DataType{mockInt, mockInt},
+		},
+		{
+			[]text.TokenType{text.Or, text.And},
+			mockBoolean,
+			[]DataType{mockBoolean, mockBoolean},
+		},
+		{
+			[]text.TokenType{text.Equal, text.NotEqual},
+			mockBoolean,
+			[]DataType{mockBoolean, mockBoolean},
+		},
+	}
+
+	for _, d := range data {
+		for _, token := range d.tokens {
+			nameAnalyzer := NewNameAnalyzer(nil)
+			nameAnalyzer.stack = append(nameAnalyzer.stack, d.operandType...)
+
+			operator := text.Token{}
+			operator.Type = token
+
+			binop := text.NewBinOp(operator, nil, nil)
+			nameAnalyzer.VisitAfterBinOp(&binop)
+		}
+	}
+}
+
+func TestNameAnalyzer_mustBeTypeOf(t *testing.T) {
+	left, right := mockString, mockString
+	nameAnalyzer := NewNameAnalyzer(nil)
+	nameAnalyzer.mustBeTypeof(left, right, "boolean", "int")
+
+	err := nameAnalyzer.Errors()
+	expect := fmt.Sprintf(msgExpectingTypeof, "boolean, int", left)
+
+	msgError := err[0].Error()
+	if msgError != expect {
+		t.Errorf("Expecting error of: \n%s \nbut got: \n%s", expect, msgError)
+	}
+}
+
+func TestIsNullOk(t *testing.T) {
+	intArray := mockInt
+	intArray.isArray = true
+
+	data := []struct {
+		data   DataType
+		expect bool
+	}{
+		{mockInt, false},
+		{mockBoolean, false},
+		{mockChar, false},
+		{mockString, true},
+		{mockHuman, true},
+		{intArray, true},
+	}
+
+	for _, d := range data {
+		if IsNullOk(d.data) != d.expect {
+			t.Errorf("Data type %s expected to return %v", d.data, d.expect)
+		}
+	}
+}
+
+func TestNameAnalyzer_expecLastStackTypeOf(t *testing.T) {
+	table := NewTypeAnalyzer().table
+
+	nameAnalyzer := NewNameAnalyzer(table)
+	nameAnalyzer.stack = append(nameAnalyzer.stack, mockString)
+	if nameAnalyzer.expectLastStackTypeOf("int", false) != false {
+		t.Error("Expected to return false.")
+	}
+
+	intArray := mockInt
+	intArray.isArray = true
+	nameAnalyzer.stack = append(nameAnalyzer.stack, intArray)
+	if nameAnalyzer.expectLastStackTypeOf("int", true) != true {
+		t.Errorf("Expected to return true.")
+	}
+
+}
+
+func TestNameAnalyzer_VisitBinOp_error(t *testing.T) {
+	operator := text.Token{}
+	operator.Type = text.Addition
+
+	left, right := mockInt, mockBoolean
+	binOp := text.NewBinOp(operator, nil, nil)
+
+	nameAnalyzer := NewNameAnalyzer(nil)
+	nameAnalyzer.stack = append(nameAnalyzer.stack, left, right)
+	nameAnalyzer.VisitAfterBinOp(&binOp)
+
+	if size := len(nameAnalyzer.stack); size != 0 {
+		t.Errorf("Stack should be empty on failed operation, but got %d item.", size)
+	}
+
+	err := nameAnalyzer.Errors()
+	if len(err) == 0 {
+		t.Errorf("Failed operator should add errors.")
+	}
+
+	expect := fmt.Sprintf(msgExpectingTypeof, left, right)
+	if err[0].Error() != expect {
+		t.Errorf("Failed operator should add error of: \n%s \nbut got: \n%s", err[0].Error(), expect)
+	}
+}
+
+func TestNameAnalyzer_VisitConstant(t *testing.T) {
+	// primitives types
+	data := []struct {
+		expression text.Expression
+		expected   DataType
+	}{
+
+		{text.Null{}, mockNull},
+		{text.Num(1), mockInt},
+		{text.Boolean(true), mockBoolean},
+		{text.Char('a'), mockChar},
+		{text.String("Hello"), mockString},
+	}
+
+	for _, d := range data {
+		table := NewTypeAnalyzer().table
+		nameAnalyzer := NewNameAnalyzer(table)
+		d.expression.Accept(nameAnalyzer)
+		typeof, err := nameAnalyzer.stack.Pop()
+		if err != nil {
+			t.Error("Constant should put type on stack")
+		}
+
+		if typeof != d.expected {
+			t.Errorf("Expected type of %s but got %s.", d.expected, typeof)
+		}
+	}
+
+	// this
+	human := *classHuman
+	typeAnalyzer := NewTypeAnalyzer()
+	human.Accept(typeAnalyzer)
+
+	table := typeAnalyzer.table // mock table provide this
+
+	expected := DataType{table["Human"], false}
+	nameAnalyzer := NewNameAnalyzer(table)
+	nameAnalyzer.newScope("func")
+	nameAnalyzer.scope.Insert(&FieldSymbol{expected, "this"})
+
+	this := &text.This{Child: &text.FieldAccess{Name: "Hello", Child: nil}}
+	this.Accept(nameAnalyzer)
+
+	typeof, err := nameAnalyzer.stack.Pop()
+	if err != nil {
+		t.Error("This should be put in the stack but got error.")
+	}
+
+	if typeof != expected {
+		t.Errorf("Should be type of %s, but got %s.", expected, typeof)
+	}
+
+	thisSymbol := &FieldSymbol{expected, "this"}
+	if nameAnalyzer.curField.String() != thisSymbol.String() {
+		t.Errorf("name.curField should contain a field symbol but got %s instead of %s", nameAnalyzer.curField, thisSymbol)
+	}
 }

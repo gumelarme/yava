@@ -18,6 +18,7 @@ var (
 	msgExpectingTypeof          = "Expecting a type of '%s' but got '%s' instead."
 	msgExpectingReturnTypeOf    = "Expecting a return type of '%s' but got '%s' instead."
 	msgVoidDontHaveType         = "The function return type is void, but got '%s'"
+	msgCantBeNull               = "Type of %s can be assigned with null value."
 )
 
 type TypeStack []DataType
@@ -79,12 +80,25 @@ func (n *NameAnalyzer) newScope(name string) {
 func (n *NameAnalyzer) expectLastStackTypeOf(name string, array bool) bool {
 	lastStack, _ := n.stack.Pop()
 	sym := n.typeTable.Lookup(name)
-	expect := (DataType{sym, array})
+	expect := DataType{sym, array}
 	if lastStack != expect {
 		n.AddErrorf(msgExpectingTypeof, expect, lastStack)
 		return false
 	}
 	return true
+}
+
+func IsNullOk(dt DataType) bool {
+	if dt.isArray {
+		return true
+	}
+
+	switch dt.dataType.name {
+	case "int", "boolean", "char":
+		return false
+	default:
+		return true
+	}
 }
 
 func (n *NameAnalyzer) getAccess() text.AccessModifier {
@@ -182,14 +196,6 @@ func (n *NameAnalyzer) VisitVariableDeclaration(varDecl *text.VariableDeclaratio
 		n.AddErrorf(msgVariableAlreadyDeclared, varName)
 		return
 	}
-
-	n.scope.Insert(&FieldSymbol{
-		DataType{
-			typeof,
-			varDecl.Type.IsArray,
-		},
-		varName,
-	})
 }
 
 func (n *NameAnalyzer) typeExist(name string) *TypeSymbol {
@@ -202,12 +208,23 @@ func (n *NameAnalyzer) typeExist(name string) *TypeSymbol {
 }
 
 func (n *NameAnalyzer) VisitAfterVariableDeclaration(varDecl *text.VariableDeclaration) {
-	if varDecl.Value == nil {
-		return
-	}
-
 	typeof := n.typeTable.Lookup(varDecl.Type.Name)
-	if typeof == nil {
+	canDeclare := true
+	defer func() {
+		if !canDeclare {
+			return
+		}
+
+		n.scope.Insert(&FieldSymbol{
+			DataType{
+				typeof,
+				varDecl.Type.IsArray,
+			},
+			varDecl.Name,
+		})
+	}()
+
+	if varDecl.Value == nil {
 		return
 	}
 
@@ -215,29 +232,22 @@ func (n *NameAnalyzer) VisitAfterVariableDeclaration(varDecl *text.VariableDecla
 	expressionType, err := n.stack.Pop()
 
 	if err != nil {
+		canDeclare = false
 		return
 	}
 
 	if IsNullOk(varType) && expressionType.Name() == "null" {
+		n.AddErrorf(msgCantBeNull, varType)
+		canDeclare = false
 		return
 	}
 
 	if varType != expressionType {
 		n.AddErrorf(msgExpectingTypeof, varType, expressionType)
-	}
-}
-
-func IsNullOk(dt DataType) bool {
-	if dt.isArray {
-		return true
+		canDeclare = false
+		return
 	}
 
-	switch dt.dataType.name {
-	case "int", "boolean", "char":
-		return false
-	default:
-		return true
-	}
 }
 
 func (n *NameAnalyzer) VisitStatementList(text.StatementList) {
@@ -407,8 +417,10 @@ func (n *NameAnalyzer) VisitAfterMethodCall(method *text.MethodCall) {
 	} else {
 		n.stack.Overwrite(methodSym.DataType)
 	}
-	n.curField = methodSym
 
+	if method.ChildNode() != nil {
+		n.curField = methodSym
+	}
 }
 
 func (n *NameAnalyzer) VisitArrayCreation(arr *text.ArrayCreation) {
@@ -448,7 +460,7 @@ func (n *NameAnalyzer) mustBeTypeof(left, right DataType, types ...string) bool 
 
 	typeString := strings.Join(types, ", ")
 	if !typeOk {
-		n.AddErrorf(msgExpectingTypeof, typeString)
+		n.AddErrorf(msgExpectingTypeof, typeString, leftName)
 		return false
 	}
 
@@ -456,16 +468,8 @@ func (n *NameAnalyzer) mustBeTypeof(left, right DataType, types ...string) bool 
 }
 
 func (n *NameAnalyzer) VisitAfterBinOp(bin *text.BinOp) {
-	right, err := n.stack.Pop()
-	if err != nil {
-		return
-	}
-
-	left, err := n.stack.Pop()
-	if err != nil {
-		return
-	}
-
+	right, _ := n.stack.Pop()
+	left, _ := n.stack.Pop()
 	evaluate := func(being string, types ...string) {
 		if !n.mustBeTypeof(left, right, types...) {
 			return

@@ -403,10 +403,6 @@ type BinOp struct {
 
 // TODO: Decide wether to export BinOp or not
 func NewBinOp(op Token, left, right Expression) BinOp {
-	if op.Type < Addition || op.Type > Modulus {
-		panic("Operator should be either Addition, Subtraction, Multiplication, Division or Modulus")
-	}
-
 	return BinOp{op, left, right}
 }
 
@@ -447,7 +443,7 @@ type ObjectCreation struct {
 
 func (o *ObjectCreation) Accept(visitor Visitor) {
 	visitor.VisitObjectCreation(o)
-	visitor.VisitAfterMethodCall(&o.MethodCall)
+	o.MethodCall.Accept(visitor)
 }
 
 func (o *ObjectCreation) NodeContent() (string, string) {

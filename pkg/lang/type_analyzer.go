@@ -34,16 +34,24 @@ type TypeAnalyzer struct {
 	table   TypeTable
 }
 
+var (
+	PrimitiveNull    = NewType("null", Primitive)
+	PrimitiveInt     = NewType("int", Primitive)
+	PrimitiveBoolean = NewType("boolean", Primitive)
+	PrimitiveChar    = NewType("char", Primitive)
+	PrimitiveString  = NewType("String", Primitive)
+)
+
 func NewTypeAnalyzer() *TypeAnalyzer {
 	return &TypeAnalyzer{
 		make([]string, 0),
 		nil,
-		map[string]*TypeSymbol{
-			"null":    NewType("null", Primitive),
-			"int":     NewType("int", Primitive),
-			"boolean": NewType("boolean", Primitive),
-			"char":    NewType("char", Primitive),
-			"String":  NewType("String", Class),
+		TypeTable{
+			"null":    PrimitiveNull,
+			"int":     PrimitiveInt,
+			"boolean": PrimitiveBoolean,
+			"char":    PrimitiveChar,
+			"String":  PrimitiveString,
 		},
 	}
 }
