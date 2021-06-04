@@ -396,3 +396,38 @@ func TestKrakatauGen_SystemOut(t *testing.T) {
 		"invokevirtual Method java/io/PrintStream println (I)V",
 	)
 }
+
+func TestKrakatauGen_JumpStatement(t *testing.T) {
+	data := []struct {
+		jump   text.JumpStatement
+		expect []string
+	}{
+		{
+			text.JumpStatement{Type: text.ReturnJump, Exp: nil},
+			[]string{"return"},
+		},
+		{
+			text.JumpStatement{Type: text.ReturnJump, Exp: text.String("Nice")},
+			[]string{`ldc "Nice"`, "areturn"},
+		},
+		{
+			text.JumpStatement{Type: text.ReturnJump, Exp: text.Num(1)},
+			[]string{"iconst_1", "ireturn"},
+		},
+		{
+			text.JumpStatement{Type: text.ReturnJump, Exp: text.Char('\u0001')},
+			[]string{"iconst_1", "ireturn"},
+		},
+		{
+			text.JumpStatement{Type: text.ReturnJump, Exp: text.Boolean(true)},
+			[]string{"iconst_1", "ireturn"},
+		},
+	}
+
+	for _, d := range data {
+		gen := NewKrakatauGenerator()
+		d.jump.Accept(gen)
+		assertHasSameCodes(t, gen, d.expect...)
+	}
+
+}

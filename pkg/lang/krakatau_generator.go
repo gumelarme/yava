@@ -256,17 +256,32 @@ func (c *KrakatauGen) VisitAfterWhileStatementCondition(*text.WhileStatement)  {
 func (c *KrakatauGen) VisitAssignmentStatement(*text.AssignmentStatement)      {}
 func (c *KrakatauGen) VisitAfterAssignmentStatement(*text.AssignmentStatement) {}
 func (c *KrakatauGen) VisitJumpStatement(*text.JumpStatement)                  {}
-func (c *KrakatauGen) VisitAfterJumpStatement(*text.JumpStatement)             {}
-func (c *KrakatauGen) VisitFieldAccess(*text.FieldAccess)                      {}
-func (c *KrakatauGen) VisitArrayAccess(*text.ArrayAccess)                      {}
-func (c *KrakatauGen) VisitAfterArrayAccess(*text.ArrayAccess)                 {}
-func (c *KrakatauGen) VisitArrayAccessDelegate(text.NamedValue)                {}
-func (c *KrakatauGen) VisitMethodCall(*text.MethodCall)                        {}
-func (c *KrakatauGen) VisitAfterMethodCall(*text.MethodCall)                   {}
-func (c *KrakatauGen) VisitArrayCreation(*text.ArrayCreation)                  {}
-func (c *KrakatauGen) VisitAfterArrayCreation(*text.ArrayCreation)             {}
-func (c *KrakatauGen) VisitObjectCreation(*text.ObjectCreation)                {}
-func (c *KrakatauGen) VisitBinOp(*text.BinOp)                                  {}
+func (c *KrakatauGen) VisitAfterJumpStatement(jump *text.JumpStatement) {
+	defer c.decStackSize(1)
+	if jump.ChildNode() == nil {
+		c.AppendCode("return")
+		return
+	}
+
+	//FIXME this is only works for constant, further type analysis needed
+	name, _ := jump.ChildNode().NodeContent()
+	switch name {
+	case "int", "boolean", "char":
+		c.AppendCode("ireturn")
+	default:
+		c.AppendCode("areturn")
+	}
+}
+func (c *KrakatauGen) VisitFieldAccess(*text.FieldAccess)          {}
+func (c *KrakatauGen) VisitArrayAccess(*text.ArrayAccess)          {}
+func (c *KrakatauGen) VisitAfterArrayAccess(*text.ArrayAccess)     {}
+func (c *KrakatauGen) VisitArrayAccessDelegate(text.NamedValue)    {}
+func (c *KrakatauGen) VisitMethodCall(*text.MethodCall)            {}
+func (c *KrakatauGen) VisitAfterMethodCall(*text.MethodCall)       {}
+func (c *KrakatauGen) VisitArrayCreation(*text.ArrayCreation)      {}
+func (c *KrakatauGen) VisitAfterArrayCreation(*text.ArrayCreation) {}
+func (c *KrakatauGen) VisitObjectCreation(*text.ObjectCreation)    {}
+func (c *KrakatauGen) VisitBinOp(*text.BinOp)                      {}
 func (c *KrakatauGen) VisitAfterBinOp(bin *text.BinOp) {
 	var strOperator string
 	switch bin.GetOperator().Type {
