@@ -125,21 +125,22 @@ func Test_fieldDescriptor(t *testing.T) {
 }
 
 func assertHasNCode(t *testing.T, gen *KrakatauGen, count int) bool {
-	if codeCount := len(gen.codes); codeCount != count {
+	if codeCount := len(gen.Codes()); codeCount != count {
 		t.Errorf("Should at least has %d line of codes, but got %d.", count, codeCount)
 		return false
 	}
 	return true
 }
 
-func assertHasSameCodes(t *testing.T, gen *KrakatauGen, expect []string) {
+func assertHasSameCodes(t *testing.T, gen *KrakatauGen, expect ...string) {
 	if !assertHasNCode(t, gen, len(expect)) {
 		return
 	}
 
+	codes := gen.Codes()
 	for i, code := range expect {
-		if code != gen.codes[i] {
-			t.Errorf("Expecting: \n%#v but got %#v", code, gen.codes[i])
+		if code != codes[i] {
+			t.Errorf("Expecting: \n%#v but got %#v", code, codes[i])
 		}
 	}
 }
@@ -201,7 +202,7 @@ func TestKrakatauGen_Class(t *testing.T) {
 	for _, d := range data {
 		gen := NewKrakatauGenerator()
 		gen.VisitClass(d.class)
-		assertHasSameCodes(t, gen, d.expect)
+		assertHasSameCodes(t, gen, d.expect...)
 	}
 }
 
@@ -209,9 +210,7 @@ func TestKrakatauGen_AfterClass(t *testing.T) {
 	var class *text.Class
 	gen := NewKrakatauGenerator()
 	gen.VisitAfterClass(class)
-	assertHasSameCodes(t, gen, []string{
-		".end class",
-	})
+	assertHasSameCodes(t, gen, ".end class")
 }
 
 func TestKrakatauGen_AfterBinOp(t *testing.T) {
@@ -226,6 +225,7 @@ func TestKrakatauGen_AfterBinOp(t *testing.T) {
 	data := []struct {
 		binaryOp text.BinOp
 		expect   []string
+		stackMax int
 	}{
 		{
 			text.NewBinOp(add, text.Num(12000), text.Num(3)),
@@ -234,6 +234,7 @@ func TestKrakatauGen_AfterBinOp(t *testing.T) {
 				"iconst_3",
 				"iadd",
 			},
+			2,
 		},
 		{
 			text.NewBinOp(mod, text.Num(12), text.Num(3)),
@@ -242,6 +243,7 @@ func TestKrakatauGen_AfterBinOp(t *testing.T) {
 				"iconst_3",
 				"imod",
 			},
+			2,
 		},
 
 		{
@@ -253,13 +255,17 @@ func TestKrakatauGen_AfterBinOp(t *testing.T) {
 				"imul",
 				"idiv",
 			},
+			3,
 		},
 	}
 
 	for _, d := range data {
 		gen := NewKrakatauGenerator()
 		d.binaryOp.Accept(gen)
-		assertHasSameCodes(t, gen, d.expect)
+		assertHasSameCodes(t, gen, d.expect...)
+		if gen.stackMax != d.stackMax {
+			t.Errorf("Stack size should be %d, but got %d", d.stackMax, gen.stackMax)
+		}
 	}
 }
 
@@ -305,15 +311,88 @@ func TestKrakatauGen_MethodSignature(t *testing.T) {
 	for _, d := range data {
 		gen := NewKrakatauGenerator()
 		gen.VisitMethodSignature(&d.signature)
-		assertHasSameCodes(t, gen, []string{d.expect})
+		assertHasSameCodes(t, gen, d.expect)
 	}
 }
 
 func TestKrakatauGen_AfterMethodDeclaration(t *testing.T) {
 	gen := NewKrakatauGenerator()
 	gen.VisitAfterMethodDeclaration(nil)
-	assertHasSameCodes(t, gen, []string{
+	assertHasSameCodes(t, gen,
+		".code stack 0 locals 0",
+		"return",
 		".end code",
 		".end method",
-	})
+	)
+
+	gen = NewKrakatauGenerator()
+	gen.stackMax = 3
+	gen.localCount = 4
+	gen.codeBuffer = []string{
+		"bipush 11",
+		"bipush 12",
+		"iadd",
+		"ireturn",
+	}
+
+	gen.VisitAfterMethodDeclaration(nil)
+	assertHasSameCodes(t, gen,
+		".code stack 3 locals 4",
+		"bipush 11",
+		"bipush 12",
+		"iadd",
+		"ireturn",
+		".end code",
+		".end method",
+	)
+
+}
+
+func TestKrakatauGen_MainMethodDeclaration(t *testing.T) {
+	gen := NewKrakatauGenerator()
+	gen.VisitMainMethodDeclaration(nil)
+	assertHasSameCodes(t, gen, ".method public static main : ([Ljava/lang/String;)V")
+}
+
+func TestKrakatauGen_stackSize(t *testing.T) {
+	gen := NewKrakatauGenerator()
+	gen.incStackSize(3)
+	gen.incStackSize(1)
+	if gen.stackSize != 4 && gen.stackMax != 4 {
+		t.Errorf("Expecting stack size = 4, stack max = 4, but got %d and %d instead.", gen.stackSize, gen.stackMax)
+	}
+
+	gen.decStackSize(2)
+	if gen.stackSize != 2 && gen.stackMax != 4 {
+		t.Errorf("Expecting stack size = 2, stack max = 4, but got %d and %d instead.", gen.stackSize, gen.stackMax)
+	}
+
+	gen.resetStackSize()
+	if gen.stackSize != 0 && gen.stackMax != 0 {
+		t.Errorf("Expecting stack size & stack max to be 0, but got %d and %d instead.", gen.stackSize, gen.stackMax)
+	}
+}
+
+func TestKrakatauGen_SystemOut(t *testing.T) {
+	sys := text.FieldAccess{
+		Name: "System",
+		Child: &text.FieldAccess{
+			Name: "out",
+			Child: &text.MethodCall{
+				Name: "println",
+				Args: []text.Expression{
+					text.Num(1),
+				},
+				Child: nil,
+			},
+		},
+	}
+	gen := NewKrakatauGenerator()
+	sys.Accept(gen)
+
+	assertHasSameCodes(t, gen,
+		"getstatic Field java/lang/System out Ljava/io/PrintStream;",
+		"iconst_1",
+		"invokevirtual Method java/io/PrintStream println (I)V",
+	)
 }

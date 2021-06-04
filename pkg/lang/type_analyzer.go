@@ -219,6 +219,7 @@ func (t *TypeAnalyzer) VisitMethodSignature(signature *text.MethodSignature) {
 	}
 }
 
+func (t *TypeAnalyzer) VisitMainMethodDeclaration(*text.MainMethodDeclaration)  {}
 func (t *TypeAnalyzer) VisitMethodDeclaration(*text.MethodDeclaration)          {}
 func (t *TypeAnalyzer) VisitAfterMethodDeclaration(*text.MethodDeclaration)     {}
 func (t *TypeAnalyzer) VisitVariableDeclaration(*text.VariableDeclaration)      {}
@@ -250,3 +251,5 @@ func (t *TypeAnalyzer) VisitObjectCreation(*text.ObjectCreation)                
 func (t *TypeAnalyzer) VisitBinOp(*text.BinOp)                                  {}
 func (t *TypeAnalyzer) VisitAfterBinOp(*text.BinOp)                             {}
 func (t *TypeAnalyzer) VisitConstant(text.Expression)                           {}
+func (t *TypeAnalyzer) VisitSystemOut()                                         {}
+func (t *TypeAnalyzer) VisitAfterSystemOut()                                    {}

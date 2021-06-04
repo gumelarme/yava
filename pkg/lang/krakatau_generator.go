@@ -97,13 +97,37 @@ func fieldDescriptor(name string, isArray bool) (result string) {
 }
 
 type KrakatauGen struct {
-	codes []string
+	stackMax   int
+	stackSize  int
+	localCount int
+	codes      []string
+	codeBuffer []string
 }
 
 func NewKrakatauGenerator() *KrakatauGen {
 	return &KrakatauGen{
+		0,
+		0,
+		0,
+		make([]string, 0),
 		make([]string, 0),
 	}
+}
+
+func (c *KrakatauGen) Codes() []string {
+	codes := make([]string, len(c.codes)+len(c.codeBuffer))
+	i := 0
+	for _, text := range c.codes {
+		codes[i] = text
+		i += 1
+	}
+
+	for _, text := range c.codeBuffer {
+		codes[i] = text
+		i += 1
+	}
+
+	return codes
 }
 
 func (c *KrakatauGen) GenerateCode() string {
@@ -113,6 +137,39 @@ func (c *KrakatauGen) Append(text string) {
 	c.codes = append(c.codes, text)
 }
 
+func (c *KrakatauGen) AppendCode(text string) {
+	c.codeBuffer = append(c.codeBuffer, text)
+}
+
+func (c *KrakatauGen) resetStackSize() {
+	c.stackSize, c.stackMax = 0, 0
+}
+
+func (c *KrakatauGen) decStackSize(count int) {
+	c.stackSize -= count
+}
+
+func (c *KrakatauGen) incStackSize(count int) {
+	c.stackSize += count
+	if c.stackSize > c.stackMax {
+		c.stackMax = c.stackSize
+	}
+}
+
+func (c *KrakatauGen) isCodeEndsWithReturn() bool {
+	length := len(c.codeBuffer) - 1
+
+	if length == -1 {
+		return false
+	}
+
+	switch c.codeBuffer[length] {
+	case "ireturn", "return", "areturn":
+		return true
+	default:
+		return false
+	}
+}
 func (c *KrakatauGen) VisitProgram(program text.Program) {
 	c.Append(fmt.Sprintf(".version %d %d", MajorVersion, MinorVersion))
 }
@@ -157,12 +214,32 @@ func (c *KrakatauGen) VisitMethodSignature(signature *text.MethodSignature) {
 
 	c.Append(code)
 }
+
 func (c *KrakatauGen) VisitMethodDeclaration(*text.MethodDeclaration) {}
+func (c *KrakatauGen) VisitMainMethodDeclaration(*text.MainMethodDeclaration) {
+	c.Append(".method public static main : ([Ljava/lang/String;)V")
+}
+
 func (c *KrakatauGen) VisitAfterMethodDeclaration(*text.MethodDeclaration) {
-	//TODO: Calculate stack and locals
+	defer func() {
+		c.codeBuffer = make([]string, 0)
+	}()
+
+	c.Append(fmt.Sprintf(".code stack %d locals %d", c.stackMax, c.localCount))
+
+	for _, code := range c.codeBuffer {
+		c.Append(code)
+	}
+
+	if !c.isCodeEndsWithReturn() {
+		// FIXME: determine the return type
+		c.Append("return")
+	}
+
 	c.Append(".end code")
 	c.Append(".end method")
 }
+
 func (c *KrakatauGen) VisitVariableDeclaration(*text.VariableDeclaration)      {}
 func (c *KrakatauGen) VisitAfterVariableDeclaration(*text.VariableDeclaration) {}
 func (c *KrakatauGen) VisitStatementList(text.StatementList)                   {}
@@ -204,9 +281,27 @@ func (c *KrakatauGen) VisitAfterBinOp(bin *text.BinOp) {
 	case text.Modulus:
 		strOperator = "imod"
 	}
-	c.Append(strOperator)
+
+	// use (remove) two operand, and place the result in the stack
+	c.decStackSize(1)
+	c.AppendCode(strOperator)
 }
 
 func (c *KrakatauGen) VisitConstant(e text.Expression) {
-	c.Append(codeConstant(e))
+	c.incStackSize(1)
+	c.AppendCode(codeConstant(e))
+}
+
+func (c *KrakatauGen) VisitSystemOut() {
+	c.localCount = 1
+	c.AppendCode("getstatic Field java/lang/System out Ljava/io/PrintStream;")
+	c.incStackSize(1)
+}
+
+func (c *KrakatauGen) VisitAfterSystemOut() {
+	// FIXME: determine the type using name analyzer, type symbol
+	argtype := "I"
+	invoke := fmt.Sprintf("invokevirtual Method java/io/PrintStream println (%s)V", argtype)
+	c.AppendCode(invoke)
+	c.decStackSize(2)
 }

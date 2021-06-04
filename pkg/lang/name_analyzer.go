@@ -178,7 +178,8 @@ func (n *NameAnalyzer) VisitMethodSignature(sign *text.MethodSignature) {
 
 }
 
-func (n *NameAnalyzer) VisitMethodDeclaration(*text.MethodDeclaration) {}
+func (n *NameAnalyzer) VisitMethodDeclaration(*text.MethodDeclaration)         {}
+func (n *NameAnalyzer) VisitMainMethodDeclaration(*text.MainMethodDeclaration) {}
 func (n *NameAnalyzer) VisitAfterMethodDeclaration(*text.MethodDeclaration) {
 	//popping method return type
 	n.stack.Pop()
@@ -522,3 +523,6 @@ func (n *NameAnalyzer) VisitConstant(ex text.Expression) {
 		}
 	}
 }
+
+func (n *NameAnalyzer) VisitSystemOut()      {}
+func (n *NameAnalyzer) VisitAfterSystemOut() {}

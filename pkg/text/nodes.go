@@ -15,6 +15,7 @@ type Visitor interface {
 	VisitInterface(*Interface)
 	VisitPropertyDeclaration(*PropertyDeclaration)
 	VisitMethodSignature(*MethodSignature)
+	VisitMainMethodDeclaration(*MainMethodDeclaration)
 	VisitMethodDeclaration(*MethodDeclaration)
 	VisitAfterMethodDeclaration(*MethodDeclaration)
 	VisitVariableDeclaration(*VariableDeclaration)
@@ -46,6 +47,8 @@ type Visitor interface {
 	VisitBinOp(*BinOp)
 	VisitAfterBinOp(*BinOp)
 	VisitConstant(Expression)
+	VisitSystemOut()
+	VisitAfterSystemOut()
 }
 
 // Node represent a basic AST Node
@@ -297,6 +300,18 @@ func (FieldAccess) IsExpression() bool {
 }
 
 func (f *FieldAccess) Accept(v Visitor) {
+	if f.Name == "System" && f.Child != nil {
+		// assume that println always called after this
+		v.VisitSystemOut()
+		// out -> println
+		println := f.ChildNode().ChildNode().(*MethodCall)
+		for _, arg := range println.Args {
+			arg.Accept(v)
+		}
+		v.VisitAfterSystemOut()
+		return
+	}
+
 	v.VisitFieldAccess(f)
 	if f.Child == nil {
 		return
@@ -1066,6 +1081,12 @@ func (m *MainMethodDeclaration) NodeContent() (string, string) {
 		m.Name,
 		m.ReturnType,
 	)
+}
+
+func (m *MainMethodDeclaration) Accept(v Visitor) {
+	v.VisitMainMethodDeclaration(m)
+	m.Body.Accept(v)
+	v.VisitAfterMethodDeclaration(&m.MethodDeclaration)
 }
 
 func (m *MainMethodDeclaration) DeclType() DeclarationType {
