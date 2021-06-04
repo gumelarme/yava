@@ -27,6 +27,7 @@ type Visitor interface {
 	VisitAfterSwitchStatement(*SwitchStatement)
 	VisitIfStatement(*IfStatement)
 	VisitAfterIfStatementCondition(*IfStatement)
+	VisitAfterIfStatementBody(*IfStatement)
 	VisitForStatement(*ForStatement)
 	VisitAfterForStatementCondition(*ForStatement)
 	VisitWhileStatement(*WhileStatement)
@@ -717,7 +718,7 @@ func (i *IfStatement) Accept(v Visitor) {
 	i.Condition.Accept(v)
 	v.VisitAfterIfStatementCondition(i)
 	i.Body.Accept(v)
-
+	v.VisitAfterIfStatementBody(i)
 	if i.Else != nil {
 		i.Else.Accept(v)
 	}

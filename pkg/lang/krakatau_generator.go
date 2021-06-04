@@ -265,7 +265,18 @@ func (c *KrakatauGen) VisitSwitchStatement(*text.SwitchStatement)              {
 func (c *KrakatauGen) VisitSwitchCase(*text.CaseStatement)                     {}
 func (c *KrakatauGen) VisitAfterSwitchStatement(*text.SwitchStatement)         {}
 func (c *KrakatauGen) VisitIfStatement(*text.IfStatement)                      {}
-func (c *KrakatauGen) VisitAfterIfStatementCondition(*text.IfStatement)        {}
+func (c *KrakatauGen) VisitAfterIfStatementCondition(*text.IfStatement) {
+	c.AppendCode("iconst_1")
+	trueLabel, falseLabel := c.getLabel(), c.getLabel()
+	c.AppendCode(fmt.Sprintf("if_icmpeq L%d", trueLabel))
+	c.AppendCode(fmt.Sprintf("goto L%d", falseLabel))
+	c.AppendCode(labelCode("", trueLabel))
+}
+
+func (c *KrakatauGen) VisitAfterIfStatementBody(*text.IfStatement) {
+	c.AppendCode(labelCode("", c.labelCount-1))
+}
+
 func (c *KrakatauGen) VisitForStatement(*text.ForStatement)                    {}
 func (c *KrakatauGen) VisitAfterForStatementCondition(*text.ForStatement)      {}
 func (c *KrakatauGen) VisitWhileStatement(*text.WhileStatement)                {}
@@ -358,7 +369,7 @@ func (c *KrakatauGen) VisitSystemOut() {
 
 func (c *KrakatauGen) VisitAfterSystemOut() {
 	// FIXME: determine the type using name analyzer, type symbol
-	argtype := "Z"
+	argtype := "I"
 	invoke := fmt.Sprintf("invokevirtual Method java/io/PrintStream println (%s)V", argtype)
 	c.AppendCode(invoke)
 	c.decStackSize(2)

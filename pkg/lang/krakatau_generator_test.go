@@ -426,21 +426,23 @@ func TestKrakatauGen_stackSize(t *testing.T) {
 	}
 }
 
-func TestKrakatauGen_SystemOut(t *testing.T) {
-	sys := text.FieldAccess{
+func mockSysout(args ...text.Expression) *text.FieldAccess {
+	return &text.FieldAccess{
 		Name: "System",
 		Child: &text.FieldAccess{
 			Name: "out",
 			Child: &text.MethodCall{
-				Name: "println",
-				Args: []text.Expression{
-					text.Num(1),
-				},
+				Name:  "println",
+				Args:  args,
 				Child: nil,
 			},
 		},
 	}
+}
+
+func TestKrakatauGen_SystemOut(t *testing.T) {
 	gen := NewKrakatauGenerator()
+	sys := mockSysout(text.Num(1))
 	sys.Accept(gen)
 
 	assertHasSameCodes(t, gen,
@@ -482,5 +484,46 @@ func TestKrakatauGen_JumpStatement(t *testing.T) {
 		d.jump.Accept(gen)
 		assertHasSameCodes(t, gen, d.expect...)
 	}
+}
 
+func TestKrakatauGen_IfStatement(t *testing.T) {
+	var gt text.Token
+	gt.Type = text.GreaterThan
+	condition := text.NewBinOp(gt, text.Num(1), text.Num(2))
+
+	data := []struct {
+		ifstmt text.IfStatement
+		expect []string
+	}{
+		{
+			text.IfStatement{
+				Condition: &condition,
+				Body:      &text.MethodCallStatement{Method: mockSysout(text.Num(12))},
+				Else:      nil,
+			},
+			[]string{
+				"iconst_1",
+				"iconst_2",
+				"if_icmpgt L0",
+				"iconst_0",
+				"goto L1",
+				"L0:\ticonst_1",
+				"L1:\t",
+				"iconst_1",
+				"if_icmpeq L2",
+				"goto L3",
+				"L2:\t",
+				"getstatic Field java/lang/System out Ljava/io/PrintStream;",
+				"bipush 12",
+				"invokevirtual Method java/io/PrintStream println (I)V",
+				"L3:\t",
+			},
+		},
+	}
+
+	for _, d := range data {
+		gen := NewKrakatauGenerator()
+		d.ifstmt.Accept(gen)
+		assertHasSameCodes(t, gen, d.expect...)
+	}
 }
