@@ -269,6 +269,59 @@ func TestKrakatauGen_AfterBinOp(t *testing.T) {
 	}
 }
 
+func TestKrakatauGen_AfterBinOp_boolean(t *testing.T) {
+	var gt, gte, lt, lte, eq, neq text.Token
+	gt.Type = text.GreaterThan
+	gte.Type = text.GreaterThanEqual
+	lt.Type = text.LessThan
+	lte.Type = text.LessThanEqual
+	eq.Type = text.Equal
+	neq.Type = text.NotEqual
+
+	hundredsOp := text.NewBinOp(neq, text.Num(300), text.Num(200))
+	data := []struct {
+		bin    text.BinOp
+		expect []string
+	}{
+		{
+			text.NewBinOp(gt, text.Num(1), text.Num(2)),
+			[]string{
+				"iconst_1",
+				"iconst_2",
+				"if_icmpgt L0",
+				"iconst_0",
+				"goto L1",
+				"L0:\ticonst_1",
+				"L1:\t",
+			},
+		},
+		{
+			text.NewBinOp(eq, text.Num(1), &hundredsOp),
+			[]string{
+				"iconst_1",
+				"ldc 300",
+				"bipush 200",
+				"if_icmpne L0",
+				"iconst_0",
+				"goto L1",
+				"L0:\ticonst_1",
+				"L1:\t",
+				"if_icmpeq L2",
+				"iconst_0",
+				"goto L3",
+				"L2:\ticonst_1",
+				"L3:\t",
+			},
+		},
+	}
+
+	for _, d := range data {
+		gen := NewKrakatauGenerator()
+		d.bin.Accept(gen)
+		assertHasSameCodes(t, gen, d.expect...)
+	}
+}
+
 func TestKrakatauGen_MethodSignature(t *testing.T) {
 	getAge := methodGetAge.MethodSignature
 	getName := methodGetNameWithParam.MethodSignature

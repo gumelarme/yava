@@ -12,6 +12,15 @@ const (
 	MinorVersion = 0
 )
 
+func isMathOperator(token text.TokenType) bool {
+	switch token {
+	case text.Addition, text.Subtraction, text.Multiplication, text.Division, text.Modulus:
+		return true
+	default:
+		return false
+	}
+}
+
 func codeConstant(exp text.Expression) (code string) {
 	name, _ := exp.NodeContent()
 	switch name {
@@ -66,7 +75,7 @@ func indent(code string, level int) string {
 	for i := 1; i < level; i++ {
 		text = append(text, "\t")
 	}
-	return strings.Join(text, "")
+	return strings.Join(text, "") + code
 }
 
 func labelCode(code string, labelNum int) string {
@@ -100,12 +109,14 @@ type KrakatauGen struct {
 	stackMax   int
 	stackSize  int
 	localCount int
+	labelCount int
 	codes      []string
 	codeBuffer []string
 }
 
 func NewKrakatauGenerator() *KrakatauGen {
 	return &KrakatauGen{
+		0,
 		0,
 		0,
 		0,
@@ -154,6 +165,12 @@ func (c *KrakatauGen) incStackSize(count int) {
 	if c.stackSize > c.stackMax {
 		c.stackMax = c.stackSize
 	}
+}
+
+func (c *KrakatauGen) getLabel() (result int) {
+	result = c.labelCount
+	c.labelCount += 1
+	return
 }
 
 func (c *KrakatauGen) isCodeEndsWithReturn() bool {
@@ -272,34 +289,60 @@ func (c *KrakatauGen) VisitAfterJumpStatement(jump *text.JumpStatement) {
 		c.AppendCode("areturn")
 	}
 }
-func (c *KrakatauGen) VisitFieldAccess(*text.FieldAccess)          {}
-func (c *KrakatauGen) VisitArrayAccess(*text.ArrayAccess)          {}
-func (c *KrakatauGen) VisitAfterArrayAccess(*text.ArrayAccess)     {}
-func (c *KrakatauGen) VisitArrayAccessDelegate(text.NamedValue)    {}
-func (c *KrakatauGen) VisitMethodCall(*text.MethodCall)            {}
-func (c *KrakatauGen) VisitAfterMethodCall(*text.MethodCall)       {}
+
+func (c *KrakatauGen) VisitFieldAccess(*text.FieldAccess)       {}
+func (c *KrakatauGen) VisitArrayAccess(*text.ArrayAccess)       {}
+func (c *KrakatauGen) VisitAfterArrayAccess(*text.ArrayAccess)  {}
+func (c *KrakatauGen) VisitArrayAccessDelegate(text.NamedValue) {}
+func (c *KrakatauGen) VisitMethodCall(*text.MethodCall)         {}
+func (c *KrakatauGen) VisitAfterMethodCall(method *text.MethodCall) {
+	var typeof, paramSignature, returnType string
+	c.AppendCode(fmt.Sprintf("invokevirtual Method %s %s (%s)%s",
+		typeof,
+		method.Name,
+		paramSignature,
+		returnType,
+	))
+
+}
+
 func (c *KrakatauGen) VisitArrayCreation(*text.ArrayCreation)      {}
 func (c *KrakatauGen) VisitAfterArrayCreation(*text.ArrayCreation) {}
 func (c *KrakatauGen) VisitObjectCreation(*text.ObjectCreation)    {}
 func (c *KrakatauGen) VisitBinOp(*text.BinOp)                      {}
+
+var opString = map[text.TokenType]string{
+	text.Addition:         "iadd",
+	text.Subtraction:      "isub",
+	text.Multiplication:   "imul",
+	text.Division:         "idiv",
+	text.Modulus:          "imod",
+	text.GreaterThan:      "if_icmpgt",
+	text.GreaterThanEqual: "if_icmpgte",
+	text.LessThan:         "if_icmplt",
+	text.LessThanEqual:    "if_icmplte",
+	text.Equal:            "if_icmpeq",
+	text.NotEqual:         "if_icmpne",
+	// text.And:              "if_icmpgt",
+	// text.Or:               "if_icmpgt",
+}
+
 func (c *KrakatauGen) VisitAfterBinOp(bin *text.BinOp) {
-	var strOperator string
-	switch bin.GetOperator().Type {
-	case text.Addition:
-		strOperator = "iadd"
-	case text.Subtraction:
-		strOperator = "isub"
-	case text.Multiplication:
-		strOperator = "imul"
-	case text.Division:
-		strOperator = "idiv"
-	case text.Modulus:
-		strOperator = "imod"
+	// use (remove) two operand, and place the result in the stack
+	defer c.decStackSize(1)
+	strOperator := opString[bin.GetOperator().Type]
+	if isMathOperator(bin.GetOperator().Type) {
+		c.AppendCode(strOperator)
+		return
 	}
 
-	// use (remove) two operand, and place the result in the stack
-	c.decStackSize(1)
-	c.AppendCode(strOperator)
+	// from here its boolean operation
+	trueLabel, falseLabel := c.getLabel(), c.getLabel()
+	c.AppendCode(fmt.Sprintf("%s L%d", strOperator, trueLabel))
+	c.AppendCode(codeBoolean(false))
+	c.AppendCode(fmt.Sprintf("goto L%d", falseLabel))
+	c.AppendCode(labelCode(codeBoolean(true), trueLabel))
+	c.AppendCode(labelCode("", falseLabel))
 }
 
 func (c *KrakatauGen) VisitConstant(e text.Expression) {
@@ -315,7 +358,7 @@ func (c *KrakatauGen) VisitSystemOut() {
 
 func (c *KrakatauGen) VisitAfterSystemOut() {
 	// FIXME: determine the type using name analyzer, type symbol
-	argtype := "I"
+	argtype := "Z"
 	invoke := fmt.Sprintf("invokevirtual Method java/io/PrintStream println (%s)V", argtype)
 	c.AppendCode(invoke)
 	c.decStackSize(2)
