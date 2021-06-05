@@ -651,6 +651,30 @@ func TestKrakatauGen_VariableDeclaration(t *testing.T) {
 				"astore 12",
 			},
 		},
+		{
+			Local{&FieldSymbol{mockString, "name"}, 1},
+			text.VariableDeclaration{
+				newNamedType("String", false),
+				"name",
+				nil,
+			},
+			[]string{
+				`aconst_null`,
+				"astore_1",
+			},
+		},
+		{
+			Local{&FieldSymbol{mockBoolean, "name"}, 1},
+			text.VariableDeclaration{
+				newNamedType("boolean", false),
+				"name",
+				nil,
+			},
+			[]string{
+				`iconst_0`,
+				"istore_1",
+			},
+		},
 	}
 
 	for _, d := range data {

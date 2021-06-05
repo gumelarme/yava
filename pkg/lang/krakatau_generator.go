@@ -321,11 +321,25 @@ func (c *KrakatauGen) VisitAfterMethodDeclaration(*text.MethodDeclaration) {
 func (c *KrakatauGen) VisitVariableDeclaration(v *text.VariableDeclaration) {}
 
 func (c *KrakatauGen) VisitAfterVariableDeclaration(varDecl *text.VariableDeclaration) {
+	// assign default value
+	if varDecl.Value == nil {
+		typeof := c.typeTable.Lookup(varDecl.Type.Name)
+		dt := DataType{typeof, varDecl.Type.IsArray}
+		if IsPrimitive(dt) {
+			c.AppendCode("iconst_0")
+		} else {
+			c.AppendCode("aconst_null")
+		}
+		c.incStackSize(1)
+		c.typeStack.Push(dt)
+	}
+
 	c.localCount += 1
 	local := c.Lookup(varDecl.Name)
 	c.AppendCode(loadOrStore(local, Store))
 	c.decStackSize(1)
 }
+
 func (c *KrakatauGen) VisitStatementList(text.StatementList) {
 	c.incScopeIndex()
 }
