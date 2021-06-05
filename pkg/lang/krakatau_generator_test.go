@@ -134,6 +134,9 @@ func assertHasNCode(t *testing.T, gen *KrakatauGen, count int) bool {
 
 func assertHasSameCodes(t *testing.T, gen *KrakatauGen, expect ...string) {
 	if !assertHasNCode(t, gen, len(expect)) {
+		for _, code := range gen.Codes() {
+			t.Log(code)
+		}
 		return
 	}
 
@@ -487,36 +490,73 @@ func TestKrakatauGen_JumpStatement(t *testing.T) {
 }
 
 func TestKrakatauGen_IfStatement(t *testing.T) {
-	var gt text.Token
-	gt.Type = text.GreaterThan
-	condition := text.NewBinOp(gt, text.Num(1), text.Num(2))
-
+	getStatic := "getstatic Field java/lang/System out Ljava/io/PrintStream;"
+	invokeSysout := "invokevirtual Method java/io/PrintStream println (I)V"
 	data := []struct {
 		ifstmt text.IfStatement
 		expect []string
 	}{
 		{
 			text.IfStatement{
-				Condition: &condition,
+				Condition: text.Boolean(true),
 				Body:      &text.MethodCallStatement{Method: mockSysout(text.Num(12))},
 				Else:      nil,
 			},
 			[]string{
 				"iconst_1",
-				"iconst_2",
-				"if_icmpgt L0",
-				"iconst_0",
+				"ifne L0", // if true
 				"goto L1",
-				"L0:\ticonst_1",
-				"L1:\t",
-				"iconst_1",
-				"if_icmpeq L2",
-				"goto L3",
-				"L2:\t",
-				"getstatic Field java/lang/System out Ljava/io/PrintStream;",
+				"L0:\t",
+				getStatic,
 				"bipush 12",
-				"invokevirtual Method java/io/PrintStream println (I)V",
+				invokeSysout,
+				"goto L1",
+				"L1:\t",
+			},
+		},
+		{
+			text.IfStatement{
+				Condition: text.Boolean(true),
+				Body:      text.StatementList{},
+				Else:      text.StatementList{},
+			},
+			[]string{
+				"iconst_1",
+				"ifne L0", // if true
+				"goto L2",
+				"L0:\t",
+				// if body
+				"goto L1",
+				"L2:\t",
+				// else body
+				"goto L1",
+				"L1:\t",
+				// outer
+			},
+		},
+		{
+			text.IfStatement{
+				Condition: text.Boolean(true),
+				Body:      text.StatementList{},
+				Else: &text.IfStatement{
+					Condition: text.Boolean(true),
+					Body:      text.StatementList{},
+					Else:      nil,
+				},
+			},
+			[]string{
+				"iconst_1",
+				"ifne L0", // if true
+				"goto L2",
+				"L0:\t",
+				"goto L1", // if body
+				"L2:\t",   // else if
+				"iconst_1",
+				"ifne L3", //condition
+				"goto L1",
 				"L3:\t",
+				"goto L1",
+				"L1:\t",
 			},
 		},
 	}

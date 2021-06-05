@@ -28,6 +28,8 @@ type Visitor interface {
 	VisitIfStatement(*IfStatement)
 	VisitAfterIfStatementCondition(*IfStatement)
 	VisitAfterIfStatementBody(*IfStatement)
+	VisitAfterElseStatementBody(*IfStatement)
+	VisitAfterIfStatement(*IfStatement)
 	VisitForStatement(*ForStatement)
 	VisitAfterForStatementCondition(*ForStatement)
 	VisitWhileStatement(*WhileStatement)
@@ -721,6 +723,13 @@ func (i *IfStatement) Accept(v Visitor) {
 	v.VisitAfterIfStatementBody(i)
 	if i.Else != nil {
 		i.Else.Accept(v)
+		name, _ := i.Else.NodeContent()
+		if name != "if" {
+			v.VisitAfterElseStatementBody(i)
+			v.VisitAfterIfStatement(i)
+		}
+	} else {
+		v.VisitAfterIfStatement(i)
 	}
 }
 

@@ -110,12 +110,14 @@ type KrakatauGen struct {
 	stackSize  int
 	localCount int
 	labelCount int
+	outerLabel int
 	codes      []string
 	codeBuffer []string
 }
 
 func NewKrakatauGenerator() *KrakatauGen {
 	return &KrakatauGen{
+		0,
 		0,
 		0,
 		0,
@@ -264,17 +266,43 @@ func (c *KrakatauGen) VisitAfterStatementList()                                {
 func (c *KrakatauGen) VisitSwitchStatement(*text.SwitchStatement)              {}
 func (c *KrakatauGen) VisitSwitchCase(*text.CaseStatement)                     {}
 func (c *KrakatauGen) VisitAfterSwitchStatement(*text.SwitchStatement)         {}
-func (c *KrakatauGen) VisitIfStatement(*text.IfStatement)                      {}
-func (c *KrakatauGen) VisitAfterIfStatementCondition(*text.IfStatement) {
-	c.AppendCode("iconst_1")
-	trueLabel, falseLabel := c.getLabel(), c.getLabel()
-	c.AppendCode(fmt.Sprintf("if_icmpeq L%d", trueLabel))
-	c.AppendCode(fmt.Sprintf("goto L%d", falseLabel))
-	c.AppendCode(labelCode("", trueLabel))
+
+func gotoLabel(number int) string {
+	return fmt.Sprintf("goto L%d", number)
 }
 
-func (c *KrakatauGen) VisitAfterIfStatementBody(*text.IfStatement) {
-	c.AppendCode(labelCode("", c.labelCount-1))
+func (c *KrakatauGen) VisitIfStatement(*text.IfStatement) {}
+func (c *KrakatauGen) VisitAfterIfStatementCondition(ifStmt *text.IfStatement) {
+	trueLabel, falseLabel := c.getLabel(), c.getLabel()
+	if c.outerLabel == 0 {
+		c.outerLabel = falseLabel
+	}
+
+	nextJump := falseLabel
+	if ifStmt.Else != nil {
+		nextJump = c.getLabel()
+	} else if c.outerLabel > 0 {
+		nextJump = c.outerLabel
+	}
+
+	c.AppendCode(fmt.Sprintf("ifne L%d", trueLabel))
+	c.AppendCode(gotoLabel(nextJump))      // if false
+	c.AppendCode(labelCode("", trueLabel)) // if true body
+}
+
+func (c *KrakatauGen) VisitAfterIfStatementBody(ifStmt *text.IfStatement) {
+	c.AppendCode(gotoLabel(c.outerLabel))
+	if ifStmt.Else != nil {
+		c.AppendCode(labelCode("", c.labelCount-1)) // equals to nextJump
+	}
+}
+
+func (c *KrakatauGen) VisitAfterElseStatementBody(ifStmt *text.IfStatement) {
+	c.AppendCode(gotoLabel(c.outerLabel))
+}
+
+func (c *KrakatauGen) VisitAfterIfStatement(ifStmt *text.IfStatement) {
+	c.AppendCode(labelCode("", c.outerLabel))
 }
 
 func (c *KrakatauGen) VisitForStatement(*text.ForStatement)                    {}

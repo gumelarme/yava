@@ -286,7 +286,9 @@ func (n *NameAnalyzer) VisitAfterIfStatementCondition(*text.IfStatement) {
 	n.expectLastStackTypeOf("boolean", false)
 }
 
-func (n *NameAnalyzer) VisitAfterIfStatementBody(*text.IfStatement) {}
+func (n *NameAnalyzer) VisitAfterIfStatementBody(*text.IfStatement)   {}
+func (n *NameAnalyzer) VisitAfterIfStatement(*text.IfStatement)       {}
+func (n *NameAnalyzer) VisitAfterElseStatementBody(*text.IfStatement) {}
 func (n *NameAnalyzer) VisitForStatement(forStmt *text.ForStatement) {
 	if forStmt.Init == nil {
 		return
