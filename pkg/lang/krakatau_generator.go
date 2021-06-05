@@ -145,6 +145,7 @@ type KrakatauGen struct {
 	symbolTable    []*SymbolTable
 	isScopeCreated bool
 	scopeIndex     int
+	typeStack      TypeStack
 }
 
 func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauGen {
@@ -160,6 +161,7 @@ func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauG
 		symbolTables,
 		false,
 		-1,
+		TypeStack{},
 	}
 }
 
@@ -322,6 +324,7 @@ func (c *KrakatauGen) VisitAfterVariableDeclaration(varDecl *text.VariableDeclar
 	c.localCount += 1
 	local := c.Lookup(varDecl.Name)
 	c.AppendCode(loadOrStore(local, Store))
+	c.decStackSize(1)
 }
 func (c *KrakatauGen) VisitStatementList(text.StatementList) {
 	c.incScopeIndex()
@@ -405,7 +408,9 @@ func (c *KrakatauGen) VisitAfterJumpStatement(jump *text.JumpStatement) {
 
 func (c *KrakatauGen) VisitFieldAccess(field *text.FieldAccess) {
 	local := c.Lookup(field.Name)
+	c.typeStack.Push(local.Member.Type())
 	c.AppendCode(loadOrStore(local, Load))
+	c.incStackSize(1)
 }
 
 func (c *KrakatauGen) VisitArrayAccess(*text.ArrayAccess)       {}
@@ -450,6 +455,7 @@ func (c *KrakatauGen) VisitAfterBinOp(bin *text.BinOp) {
 	strOperator := opString[bin.GetOperator().Type]
 	if isMathOperator(bin.GetOperator().Type) {
 		c.AppendCode(strOperator)
+		c.typeStack.Push(DataType{PrimitiveInt, false})
 		return
 	}
 
@@ -460,9 +466,14 @@ func (c *KrakatauGen) VisitAfterBinOp(bin *text.BinOp) {
 	c.AppendCode(fmt.Sprintf("goto L%d", falseLabel))
 	c.AppendCode(labelCode(codeBoolean(true), trueLabel))
 	c.AppendCode(labelCode("", falseLabel))
+	c.typeStack.Push(DataType{PrimitiveBoolean, false})
 }
 
 func (c *KrakatauGen) VisitConstant(e text.Expression) {
+	typename, _ := e.NodeContent()
+	symbol := c.typeTable.Lookup(typename)
+	c.typeStack.Push(DataType{symbol, false})
+
 	c.incStackSize(1)
 	c.AppendCode(codeConstant(e))
 }
@@ -474,7 +485,8 @@ func (c *KrakatauGen) VisitSystemOut() {
 
 func (c *KrakatauGen) VisitAfterSystemOut() {
 	// FIXME: determine the type using name analyzer, type symbol
-	argtype := "I"
+	dt, _ := c.typeStack.Pop()
+	argtype := fieldDescriptor(dt.dataType.name, dt.isArray)
 	invoke := fmt.Sprintf("invokevirtual Method java/io/PrintStream println (%s)V", argtype)
 	c.AppendCode(invoke)
 	c.decStackSize(2)

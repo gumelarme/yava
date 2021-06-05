@@ -444,15 +444,56 @@ func mockSysout(args ...text.Expression) *text.FieldAccess {
 }
 
 func TestKrakatauGen_SystemOut(t *testing.T) {
-	gen := NewEmptyKrakatauGen()
-	sys := mockSysout(text.Num(1))
-	sys.Accept(gen)
+	var gt text.Token
+	gt.Type = text.GreaterThan
+	condition := text.NewBinOp(gt, text.Num(1), text.Num(2))
 
-	assertHasSameCodes(t, gen,
-		"getstatic Field java/lang/System out Ljava/io/PrintStream;",
-		"iconst_1",
-		"invokevirtual Method java/io/PrintStream println (I)V",
-	)
+	data := []struct {
+		lastDT DataType
+		arg    text.Expression
+		expect []string
+	}{
+		{
+			mockInt,
+			text.Num(1),
+			[]string{
+				"getstatic Field java/lang/System out Ljava/io/PrintStream;",
+				"iconst_1",
+				"invokevirtual Method java/io/PrintStream println (I)V",
+			},
+		},
+		{
+			mockString,
+			text.String("Hello"),
+			[]string{
+				"getstatic Field java/lang/System out Ljava/io/PrintStream;",
+				`ldc "Hello"`,
+				"invokevirtual Method java/io/PrintStream println (Ljava/lang/String;)V",
+			},
+		},
+		{
+			mockBoolean,
+			&condition,
+			[]string{
+				"getstatic Field java/lang/System out Ljava/io/PrintStream;",
+				"iconst_1",
+				"iconst_2",
+				"if_icmpgt L0",
+				"iconst_0",
+				"goto L1",
+				"L0:\ticonst_1",
+				"L1:\t",
+				"invokevirtual Method java/io/PrintStream println (Z)V",
+			},
+		},
+	}
+	for _, d := range data {
+		gen := NewEmptyKrakatauGen()
+		gen.typeStack.Push(d.lastDT)
+		sys := mockSysout(d.arg)
+		sys.Accept(gen)
+		assertHasSameCodes(t, gen, d.expect...)
+	}
 }
 
 func TestKrakatauGen_JumpStatement(t *testing.T) {
