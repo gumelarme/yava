@@ -82,6 +82,27 @@ func labelCode(code string, labelNum int) string {
 	return fmt.Sprintf("L%d:%s", labelNum, indent(code, 2))
 }
 
+func loadOrStore(local Local, isLoad bool) string {
+	strArray := make([]string, 3)
+
+	strArray[0] = "a"
+	if IsPrimitive(local.Member.Type()) {
+		strArray[0] = "i"
+	}
+
+	strArray[1] = "store"
+	if isLoad {
+		strArray[1] = "load"
+	}
+
+	strArray[2] = fmt.Sprintf("_%d", local.address)
+	if local.address > 3 {
+		strArray[2] = fmt.Sprintf(" %d", local.address)
+	}
+
+	return strings.Join(strArray, "")
+}
+
 func fieldDescriptor(name string, isArray bool) (result string) {
 	switch name {
 	case "void":
@@ -106,16 +127,20 @@ func fieldDescriptor(name string, isArray bool) (result string) {
 }
 
 type KrakatauGen struct {
-	stackMax   int
-	stackSize  int
-	localCount int
-	labelCount int
-	outerLabel int
-	codes      []string
-	codeBuffer []string
+	stackMax       int
+	stackSize      int
+	localCount     int
+	labelCount     int
+	outerLabel     int
+	codes          []string
+	codeBuffer     []string
+	typeTable      TypeTable
+	symbolTable    []*SymbolTable
+	isScopeCreated bool
+	scopeIndex     int
 }
 
-func NewKrakatauGenerator() *KrakatauGen {
+func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauGen {
 	return &KrakatauGen{
 		0,
 		0,
@@ -124,7 +149,16 @@ func NewKrakatauGenerator() *KrakatauGen {
 		0,
 		make([]string, 0),
 		make([]string, 0),
+		typeTable,
+		symbolTables,
+		false,
+		0,
 	}
+}
+
+func NewEmptyKrakatauGen() *KrakatauGen {
+	typeTable := NewTypeAnalyzer().table
+	return NewKrakatauGen(typeTable, nil)
 }
 
 func (c *KrakatauGen) Codes() []string {
@@ -152,6 +186,18 @@ func (c *KrakatauGen) Append(text string) {
 
 func (c *KrakatauGen) AppendCode(text string) {
 	c.codeBuffer = append(c.codeBuffer, text)
+}
+
+func (c *KrakatauGen) Lookup(name string) Local {
+	// FIXME: Should this be always deep
+	member, addr := c.symbolTable[c.scopeIndex].Lookup(name, true)
+	return Local{member, addr}
+}
+
+func (c *KrakatauGen) incScopeIndex() {
+	if !c.isScopeCreated {
+		c.scopeIndex += 1
+	}
 }
 
 func (c *KrakatauGen) resetStackSize() {
@@ -194,6 +240,7 @@ func (c *KrakatauGen) VisitProgram(program text.Program) {
 }
 
 func (c *KrakatauGen) VisitClass(class *text.Class) {
+	c.incScopeIndex()
 	declareClass := fmt.Sprintf(".class %s", class.Name)
 
 	super := "java/lang/Object"
@@ -217,6 +264,8 @@ func (c *KrakatauGen) VisitAfterClass(*text.Class) {
 func (c *KrakatauGen) VisitInterface(*text.Interface)                     {}
 func (c *KrakatauGen) VisitPropertyDeclaration(*text.PropertyDeclaration) {}
 func (c *KrakatauGen) VisitMethodSignature(signature *text.MethodSignature) {
+	c.incScopeIndex()
+	c.localCount = 1
 	params := make([]string, len(signature.ParameterList))
 	for i, p := range signature.ParameterList {
 		params[i] = fieldDescriptor(p.Type.Name, p.Type.IsArray)
@@ -236,6 +285,7 @@ func (c *KrakatauGen) VisitMethodSignature(signature *text.MethodSignature) {
 
 func (c *KrakatauGen) VisitMethodDeclaration(*text.MethodDeclaration) {}
 func (c *KrakatauGen) VisitMainMethodDeclaration(*text.MainMethodDeclaration) {
+	c.localCount = 1
 	c.Append(".method public static main : ([Ljava/lang/String;)V")
 }
 
@@ -259,13 +309,22 @@ func (c *KrakatauGen) VisitAfterMethodDeclaration(*text.MethodDeclaration) {
 	c.Append(".end method")
 }
 
-func (c *KrakatauGen) VisitVariableDeclaration(*text.VariableDeclaration)      {}
-func (c *KrakatauGen) VisitAfterVariableDeclaration(*text.VariableDeclaration) {}
-func (c *KrakatauGen) VisitStatementList(text.StatementList)                   {}
-func (c *KrakatauGen) VisitAfterStatementList()                                {}
-func (c *KrakatauGen) VisitSwitchStatement(*text.SwitchStatement)              {}
-func (c *KrakatauGen) VisitSwitchCase(*text.CaseStatement)                     {}
-func (c *KrakatauGen) VisitAfterSwitchStatement(*text.SwitchStatement)         {}
+func (c *KrakatauGen) VisitVariableDeclaration(v *text.VariableDeclaration) {}
+
+func (c *KrakatauGen) VisitAfterVariableDeclaration(varDecl *text.VariableDeclaration) {
+	local := c.Lookup(varDecl.Name)
+	c.AppendCode(loadOrStore(local, false))
+}
+func (c *KrakatauGen) VisitStatementList(text.StatementList) {
+	c.incScopeIndex()
+}
+func (c *KrakatauGen) VisitAfterStatementList() {
+	c.isScopeCreated = false
+}
+
+func (c *KrakatauGen) VisitSwitchStatement(*text.SwitchStatement)      {}
+func (c *KrakatauGen) VisitSwitchCase(*text.CaseStatement)             {}
+func (c *KrakatauGen) VisitAfterSwitchStatement(*text.SwitchStatement) {}
 
 func gotoLabel(number int) string {
 	return fmt.Sprintf("goto L%d", number)
@@ -303,9 +362,16 @@ func (c *KrakatauGen) VisitAfterElseStatementBody(ifStmt *text.IfStatement) {
 
 func (c *KrakatauGen) VisitAfterIfStatement(ifStmt *text.IfStatement) {
 	c.AppendCode(labelCode("", c.outerLabel))
+	c.outerLabel = 0
 }
 
-func (c *KrakatauGen) VisitForStatement(*text.ForStatement)                    {}
+func (c *KrakatauGen) VisitForStatement(forStmt *text.ForStatement) {
+	name, _ := forStmt.Init.NodeContent()
+	if name == "var-decl" {
+		c.incScopeIndex()
+		c.isScopeCreated = true
+	}
+}
 func (c *KrakatauGen) VisitAfterForStatementCondition(*text.ForStatement)      {}
 func (c *KrakatauGen) VisitWhileStatement(*text.WhileStatement)                {}
 func (c *KrakatauGen) VisitAfterWhileStatementCondition(*text.WhileStatement)  {}

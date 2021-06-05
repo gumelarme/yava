@@ -52,6 +52,7 @@ type NameAnalyzer struct {
 	Tables         []*SymbolTable
 	curField       TypeMember
 	stack          TypeStack
+	localCount     int
 }
 
 func NewNameAnalyzer(table map[string]*TypeSymbol) *NameAnalyzer {
@@ -65,6 +66,7 @@ func NewNameAnalyzer(table map[string]*TypeSymbol) *NameAnalyzer {
 		make([]*SymbolTable, 0),
 		nil,
 		TypeStack{},
+		0,
 	}
 }
 
@@ -110,6 +112,11 @@ func (n *NameAnalyzer) getAccess() text.AccessModifier {
 	return access
 }
 
+func (n *NameAnalyzer) Insert(member TypeMember) {
+	n.scope.Insert(member, n.localCount)
+	n.localCount += 1
+}
+
 func (n *NameAnalyzer) VisitProgram(text.Program)      {}
 func (n *NameAnalyzer) VisitInterface(*text.Interface) {}
 func (n *NameAnalyzer) VisitClass(class *text.Class) {
@@ -117,11 +124,11 @@ func (n *NameAnalyzer) VisitClass(class *text.Class) {
 	n.newScope(name)
 	classType := n.typeTable[class.Name]
 	for _, prop := range classType.Properties {
-		n.scope.Insert(prop)
+		n.Insert(prop)
 	}
 
 	for _, method := range classType.Methods {
-		n.scope.Insert(method)
+		n.Insert(method)
 	}
 
 	n.stack.Push(DataType{
@@ -137,11 +144,12 @@ func (n *NameAnalyzer) VisitAfterClass(*text.Class) {
 func (n *NameAnalyzer) VisitPropertyDeclaration(*text.PropertyDeclaration) {}
 
 func (n *NameAnalyzer) VisitMethodSignature(sign *text.MethodSignature) {
+	n.localCount = 0 // reset
 	n.isScopeCreated = true
 	n.newScope(fmt.Sprintf("method-%s", sign.Signature()))
 
 	classType, _ := n.stack.Pop()
-	n.scope.Insert(&FieldSymbol{
+	n.Insert(&FieldSymbol{
 		classType,
 		"this",
 	})
@@ -165,12 +173,12 @@ func (n *NameAnalyzer) VisitMethodSignature(sign *text.MethodSignature) {
 	for _, param := range sign.ParameterList {
 		typeof := n.typeTable[param.Type.Name]
 
-		if n.scope.Lookup(param.Name, true) != nil {
+		if exist, _ := n.scope.Lookup(param.Name, true); exist != nil {
 			n.AddErrorf(msgParameterAlreadyDeclared, param.Name)
 			return
 		}
 
-		n.scope.Insert(&FieldSymbol{
+		n.Insert(&FieldSymbol{
 			DataType{typeof, param.Type.IsArray},
 			param.Name,
 		})
@@ -192,7 +200,7 @@ func (n *NameAnalyzer) VisitVariableDeclaration(varDecl *text.VariableDeclaratio
 		return
 	}
 
-	symbol := n.scope.Lookup(varName, false)
+	symbol, _ := n.scope.Lookup(varName, false)
 	if symbol != nil {
 		n.AddErrorf(msgVariableAlreadyDeclared, varName)
 		return
@@ -216,7 +224,7 @@ func (n *NameAnalyzer) VisitAfterVariableDeclaration(varDecl *text.VariableDecla
 			return
 		}
 
-		n.scope.Insert(&FieldSymbol{
+		n.Insert(&FieldSymbol{
 			DataType{
 				typeof,
 				varDecl.Type.IsArray,
@@ -341,7 +349,7 @@ func (n *NameAnalyzer) VisitAfterJumpStatement(jump *text.JumpStatement) {
 }
 func (n *NameAnalyzer) VisitFieldAccess(field *text.FieldAccess) {
 	if n.curField == nil {
-		sym := n.scope.Lookup(field.Name, true)
+		sym, _ := n.scope.Lookup(field.Name, true)
 		if sym == nil {
 			n.AddErrorf(msgVariableDoesNotExist, field.Name)
 		} else {
@@ -399,7 +407,7 @@ func (n *NameAnalyzer) VisitAfterMethodCall(method *text.MethodCall) {
 	if n.curField != nil {
 		exist = n.curField.Type().dataType.LookupMethod(signature)
 	} else {
-		exist = n.scope.Lookup(signature, true)
+		exist, _ = n.scope.Lookup(signature, true)
 	}
 
 	// weird emptyMethod
@@ -518,7 +526,7 @@ func (n *NameAnalyzer) VisitConstant(ex text.Expression) {
 		}
 		n.stack.Push(dataType)
 	case "this":
-		this := n.scope.Lookup("this", true)
+		this, _ := n.scope.Lookup("this", true)
 		n.stack.Push(this.Type())
 		n.curField = &FieldSymbol{
 			DataType{this.Type().dataType, false},

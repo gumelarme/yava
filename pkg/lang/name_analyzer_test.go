@@ -117,7 +117,8 @@ func TestNameAnalyzer_MethodSignature(t *testing.T) {
 			)
 		}
 
-		param := scope.Lookup("what", true).(*FieldSymbol)
+		sym, _ := scope.Lookup("what", true)
+		param := sym.(*FieldSymbol)
 		if len(scope.table) == 0 {
 			t.Errorf("MethodSignature should introduce new field from parameter inside a new scope")
 		}
@@ -173,7 +174,7 @@ func TestNameAnalyzer_VariableDeclaration(t *testing.T) {
 			t.Error("Variable 'int realAge' should exist after visiting VariableDeclaration.")
 		}
 
-		sym := scope.Lookup("realAge", true)
+		sym, _ := scope.Lookup("realAge", true)
 		if sym == nil {
 			t.Error("Variable 'int realAge' is not exist")
 		}
@@ -446,7 +447,7 @@ func TestNameAnalyzer_VisitConstant(t *testing.T) {
 	expected := DataType{table["Human"], false}
 	nameAnalyzer := NewNameAnalyzer(table)
 	nameAnalyzer.newScope("func")
-	nameAnalyzer.scope.Insert(&FieldSymbol{expected, "this"})
+	nameAnalyzer.scope.Insert(&FieldSymbol{expected, "this"}, 1) //FIXME: change to another address
 
 	this := &text.This{Child: &text.FieldAccess{Name: "Hello", Child: nil}}
 	this.Accept(nameAnalyzer)

@@ -150,7 +150,7 @@ func assertHasSameCodes(t *testing.T, gen *KrakatauGen, expect ...string) {
 
 func TestKrakatauGen_Program(t *testing.T) {
 	var program text.Program
-	generator := NewKrakatauGenerator()
+	generator := NewEmptyKrakatauGen()
 	program.Accept(generator)
 
 	assertHasNCode(t, generator, 1)
@@ -203,7 +203,7 @@ func TestKrakatauGen_Class(t *testing.T) {
 	}
 
 	for _, d := range data {
-		gen := NewKrakatauGenerator()
+		gen := NewEmptyKrakatauGen()
 		gen.VisitClass(d.class)
 		assertHasSameCodes(t, gen, d.expect...)
 	}
@@ -211,7 +211,7 @@ func TestKrakatauGen_Class(t *testing.T) {
 
 func TestKrakatauGen_AfterClass(t *testing.T) {
 	var class *text.Class
-	gen := NewKrakatauGenerator()
+	gen := NewEmptyKrakatauGen()
 	gen.VisitAfterClass(class)
 	assertHasSameCodes(t, gen, ".end class")
 }
@@ -263,7 +263,7 @@ func TestKrakatauGen_AfterBinOp(t *testing.T) {
 	}
 
 	for _, d := range data {
-		gen := NewKrakatauGenerator()
+		gen := NewEmptyKrakatauGen()
 		d.binaryOp.Accept(gen)
 		assertHasSameCodes(t, gen, d.expect...)
 		if gen.stackMax != d.stackMax {
@@ -319,7 +319,7 @@ func TestKrakatauGen_AfterBinOp_boolean(t *testing.T) {
 	}
 
 	for _, d := range data {
-		gen := NewKrakatauGenerator()
+		gen := NewEmptyKrakatauGen()
 		d.bin.Accept(gen)
 		assertHasSameCodes(t, gen, d.expect...)
 	}
@@ -365,14 +365,14 @@ func TestKrakatauGen_MethodSignature(t *testing.T) {
 		},
 	}
 	for _, d := range data {
-		gen := NewKrakatauGenerator()
+		gen := NewEmptyKrakatauGen()
 		gen.VisitMethodSignature(&d.signature)
 		assertHasSameCodes(t, gen, d.expect)
 	}
 }
 
 func TestKrakatauGen_AfterMethodDeclaration(t *testing.T) {
-	gen := NewKrakatauGenerator()
+	gen := NewEmptyKrakatauGen()
 	gen.VisitAfterMethodDeclaration(nil)
 	assertHasSameCodes(t, gen,
 		".code stack 0 locals 0",
@@ -381,7 +381,7 @@ func TestKrakatauGen_AfterMethodDeclaration(t *testing.T) {
 		".end method",
 	)
 
-	gen = NewKrakatauGenerator()
+	gen = NewEmptyKrakatauGen()
 	gen.stackMax = 3
 	gen.localCount = 4
 	gen.codeBuffer = []string{
@@ -405,13 +405,13 @@ func TestKrakatauGen_AfterMethodDeclaration(t *testing.T) {
 }
 
 func TestKrakatauGen_MainMethodDeclaration(t *testing.T) {
-	gen := NewKrakatauGenerator()
+	gen := NewEmptyKrakatauGen()
 	gen.VisitMainMethodDeclaration(nil)
 	assertHasSameCodes(t, gen, ".method public static main : ([Ljava/lang/String;)V")
 }
 
 func TestKrakatauGen_stackSize(t *testing.T) {
-	gen := NewKrakatauGenerator()
+	gen := NewEmptyKrakatauGen()
 	gen.incStackSize(3)
 	gen.incStackSize(1)
 	if gen.stackSize != 4 && gen.stackMax != 4 {
@@ -444,7 +444,7 @@ func mockSysout(args ...text.Expression) *text.FieldAccess {
 }
 
 func TestKrakatauGen_SystemOut(t *testing.T) {
-	gen := NewKrakatauGenerator()
+	gen := NewEmptyKrakatauGen()
 	sys := mockSysout(text.Num(1))
 	sys.Accept(gen)
 
@@ -483,7 +483,7 @@ func TestKrakatauGen_JumpStatement(t *testing.T) {
 	}
 
 	for _, d := range data {
-		gen := NewKrakatauGenerator()
+		gen := NewEmptyKrakatauGen()
 		d.jump.Accept(gen)
 		assertHasSameCodes(t, gen, d.expect...)
 	}
@@ -562,8 +562,65 @@ func TestKrakatauGen_IfStatement(t *testing.T) {
 	}
 
 	for _, d := range data {
-		gen := NewKrakatauGenerator()
+		gen := NewEmptyKrakatauGen()
 		d.ifstmt.Accept(gen)
 		assertHasSameCodes(t, gen, d.expect...)
+	}
+}
+
+func newNamedType(name string, isarray bool) text.NamedType {
+	return text.NamedType{Name: name, IsArray: isarray}
+}
+
+func mockKrakatau(do func(gen *KrakatauGen)) {
+	// content := ``
+	// lexer := text.NewLexer(text.NewStringScanner(content))
+	// parser := text.NewParser(&lexer)
+	gen := NewEmptyKrakatauGen()
+	do(gen)
+}
+
+func TestKrakatauGen_VariableDeclaration(t *testing.T) {
+	data := []struct {
+		symbol  Local
+		varDecl text.VariableDeclaration
+		expect  []string
+	}{
+		{
+			Local{&FieldSymbol{mockInt, "count"}, 1},
+			text.VariableDeclaration{
+				newNamedType("int", false),
+				"count",
+				text.Num(1),
+			},
+			[]string{
+				"iconst_1",
+				"istore_1",
+			},
+		},
+		{
+			Local{&FieldSymbol{mockString, "name"}, 12},
+			text.VariableDeclaration{
+				newNamedType("String", false),
+				"name",
+				text.String("Hello"),
+			},
+			[]string{
+				`ldc "Hello"`,
+				"astore 12",
+			},
+		},
+	}
+
+	for _, d := range data {
+		mockKrakatau(func(gen *KrakatauGen) {
+			table := NewSymbolTable("mock", 0, nil)
+			table.Insert(d.symbol.Member, d.symbol.address)
+			gen.symbolTable = []*SymbolTable{
+				&table,
+			}
+			d.varDecl.Accept(gen)
+			assertHasSameCodes(t, gen, d.expect...)
+		})
 	}
 }

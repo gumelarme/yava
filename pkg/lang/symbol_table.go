@@ -112,6 +112,19 @@ func (t *TypeSymbol) LookupMethod(signature string) *MethodSymbol {
 	return nil
 }
 
+func IsPrimitive(dt DataType) bool {
+	if dt.isArray {
+		return false
+	}
+
+	switch dt.Name() {
+	case "int", "boolean", "char":
+		return true
+	default:
+		return false
+	}
+}
+
 type DataType struct {
 	dataType *TypeSymbol
 	isArray  bool
@@ -198,10 +211,16 @@ func (m *MethodSymbol) String() string {
 	return m.signature
 }
 
+// FIXME: Change to meaningful name
+type Local struct {
+	Member  TypeMember
+	address int
+}
+
 type SymbolTable struct {
 	name      string
 	level     int
-	table     map[string]TypeMember
+	table     map[string]Local
 	parent    *SymbolTable
 	isVerbose bool
 }
@@ -210,32 +229,32 @@ func NewSymbolTable(name string, level int, parent *SymbolTable) SymbolTable {
 	return SymbolTable{
 		name,
 		level,
-		make(map[string]TypeMember),
+		make(map[string]Local),
 		parent,
 		true,
 	}
 }
 
-func (s *SymbolTable) Insert(sym TypeMember) {
-	s.table[sym.Name()] = sym
+func (s *SymbolTable) Insert(sym TypeMember, address int) {
+	s.table[sym.Name()] = Local{sym, address}
 
 	if s.isVerbose {
-		fmt.Printf("Insert %s @%s\n", sym.Name(), s.name)
+		fmt.Printf("Insert %s @%s\n @%d", sym.Name(), s.name, address)
 	}
 }
 
-func (s *SymbolTable) Lookup(name string, deep bool) TypeMember {
+func (s *SymbolTable) Lookup(name string, deep bool) (TypeMember, int) {
 	if s.isVerbose {
 		fmt.Printf("Lookup %s @%s\n", name, s.name)
 	}
 
 	if val, found := s.table[name]; found {
-		return val
+		return val.Member, val.address
 	}
 
 	if s.parent != nil && deep {
 		return s.parent.Lookup(name, deep)
 	}
 
-	return nil
+	return nil, -1
 }
