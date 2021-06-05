@@ -616,6 +616,36 @@ func TestKrakatauGen_VariableDeclaration(t *testing.T) {
 		mockKrakatau(func(gen *KrakatauGen) {
 			table := NewSymbolTable("mock", 0, nil)
 			table.Insert(d.symbol.Member, d.symbol.address)
+			gen.scopeIndex = 0
+			gen.symbolTable = []*SymbolTable{
+				&table,
+			}
+			d.varDecl.Accept(gen)
+			assertHasSameCodes(t, gen, d.expect...)
+		})
+	}
+}
+
+func TestKrakatauGen_FieldAccess(t *testing.T) {
+	data := []struct {
+		symbol  Local
+		varDecl text.FieldAccess
+		expect  []string
+	}{
+		{
+			Local{&FieldSymbol{mockInt, "count"}, 12},
+			text.FieldAccess{Name: "count", Child: nil},
+			[]string{
+				"iload 12",
+			},
+		},
+	}
+
+	for _, d := range data {
+		mockKrakatau(func(gen *KrakatauGen) {
+			table := NewSymbolTable("mock", 0, nil)
+			table.Insert(d.symbol.Member, d.symbol.address)
+			gen.scopeIndex = 0
 			gen.symbolTable = []*SymbolTable{
 				&table,
 			}

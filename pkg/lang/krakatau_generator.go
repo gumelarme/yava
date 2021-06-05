@@ -82,7 +82,14 @@ func labelCode(code string, labelNum int) string {
 	return fmt.Sprintf("L%d:%s", labelNum, indent(code, 2))
 }
 
-func loadOrStore(local Local, isLoad bool) string {
+type LS int
+
+const (
+	Load LS = iota
+	Store
+)
+
+func loadOrStore(local Local, action LS) string {
 	strArray := make([]string, 3)
 
 	strArray[0] = "a"
@@ -91,7 +98,7 @@ func loadOrStore(local Local, isLoad bool) string {
 	}
 
 	strArray[1] = "store"
-	if isLoad {
+	if action == Load {
 		strArray[1] = "load"
 	}
 
@@ -152,7 +159,7 @@ func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauG
 		typeTable,
 		symbolTables,
 		false,
-		0,
+		-1,
 	}
 }
 
@@ -312,8 +319,9 @@ func (c *KrakatauGen) VisitAfterMethodDeclaration(*text.MethodDeclaration) {
 func (c *KrakatauGen) VisitVariableDeclaration(v *text.VariableDeclaration) {}
 
 func (c *KrakatauGen) VisitAfterVariableDeclaration(varDecl *text.VariableDeclaration) {
+	c.localCount += 1
 	local := c.Lookup(varDecl.Name)
-	c.AppendCode(loadOrStore(local, false))
+	c.AppendCode(loadOrStore(local, Store))
 }
 func (c *KrakatauGen) VisitStatementList(text.StatementList) {
 	c.incScopeIndex()
@@ -395,7 +403,11 @@ func (c *KrakatauGen) VisitAfterJumpStatement(jump *text.JumpStatement) {
 	}
 }
 
-func (c *KrakatauGen) VisitFieldAccess(*text.FieldAccess)       {}
+func (c *KrakatauGen) VisitFieldAccess(field *text.FieldAccess) {
+	local := c.Lookup(field.Name)
+	c.AppendCode(loadOrStore(local, Load))
+}
+
 func (c *KrakatauGen) VisitArrayAccess(*text.ArrayAccess)       {}
 func (c *KrakatauGen) VisitAfterArrayAccess(*text.ArrayAccess)  {}
 func (c *KrakatauGen) VisitArrayAccessDelegate(text.NamedValue) {}
@@ -456,7 +468,6 @@ func (c *KrakatauGen) VisitConstant(e text.Expression) {
 }
 
 func (c *KrakatauGen) VisitSystemOut() {
-	c.localCount = 1
 	c.AppendCode("getstatic Field java/lang/System out Ljava/io/PrintStream;")
 	c.incStackSize(1)
 }
