@@ -31,7 +31,7 @@ func Test_codeInt(t *testing.T) {
 		{5, "iconst_5"},
 		{6, "bipush 6"},
 		{120, "bipush 120"},
-		{255, "bipush 255"},
+		{255, "ldc 255"},
 		{256, "ldc 256"},
 		{1000_000, "ldc 1000000"},
 	}
@@ -421,7 +421,7 @@ func TestKrakatauGen_AfterBinOp_boolean(t *testing.T) {
 			[]string{
 				"iconst_1",
 				"ldc 300",
-				"bipush 200",
+				"ldc 200",
 				"if_icmpne L0",
 				"iconst_0",
 				"goto L1",
@@ -936,6 +936,65 @@ func TestKrakatau_ObjecCreation(t *testing.T) {
 	for _, d := range data {
 		mockKrakatau(func(gen *KrakatauGen) {
 			gen.VisitObjectCreation(&d.obj)
+			assertHasSameCodes(t, gen, d.expect...)
+		})
+	}
+}
+
+func TestKrakatauGen_MethodCall(t *testing.T) {
+	data := []struct {
+		local  Local
+		method text.NamedValue
+		expect []string
+	}{
+		{
+			Local{&FieldSymbol{mockHuman, "human"}, 3},
+			&text.FieldAccess{Name: "human",
+				Child: &text.MethodCall{
+					Name:  "getAge",
+					Args:  []text.Expression{},
+					Child: nil,
+				}},
+			[]string{
+				"aload_3",
+				"invokevirtual Method Human getAge ()I",
+			},
+		},
+		{
+			Local{&FieldSymbol{mockHuman, "human"}, 3},
+			&text.FieldAccess{Name: "human",
+				Child: &text.MethodCall{
+					Name: "getName",
+					Args: []text.Expression{
+						text.String("Hello"),
+					},
+					Child: nil,
+				}},
+			[]string{
+				"aload_3",
+				`ldc "Hello"`,
+				"invokevirtual Method Human getName (Ljava/lang/String;)I",
+			},
+		},
+	}
+
+	human := mockHuman.dataType
+	human.Methods[methodGetAge.Signature()] = NewMethodSymbol(methodGetAge.MethodSignature, *mockInt.dataType)
+	human.Methods[methodGetNameWithParam.Signature()] = NewMethodSymbol(methodGetName.MethodSignature, *mockInt.dataType)
+
+	for _, d := range data {
+		mockKrakatau(func(gen *KrakatauGen) {
+			gen.typeTable = NewTypeAnalyzer().table
+			gen.typeTable["Human"] = human
+
+			table := NewSymbolTable("mock", 0, nil)
+			table.Insert(d.local.Member, d.local.address)
+			gen.scopeIndex = 0
+			gen.symbolTable = []*SymbolTable{
+				&table,
+			}
+
+			d.method.Accept(gen)
 			assertHasSameCodes(t, gen, d.expect...)
 		})
 	}

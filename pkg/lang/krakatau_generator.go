@@ -45,7 +45,7 @@ func codeInt(i text.Num) string {
 	switch {
 	case i <= 5:
 		format = "iconst_%d"
-	case i <= 0xFF:
+	case i <= 128:
 		format = "bipush %d"
 	default:
 		format = "ldc %d"
@@ -348,7 +348,7 @@ func (c *KrakatauGen) makeDefaultConstructor(className string, prop ...*text.Pro
 func (c *KrakatauGen) VisitMethodSignature(signature *text.MethodSignature) {
 	c.incScopeIndex()
 	c.isScopeCreated = true
-	c.localCount = 1
+	c.localCount = len(signature.ParameterList) + 1
 	params := make([]string, len(signature.ParameterList))
 	for i, p := range signature.ParameterList {
 		params[i] = fieldDescriptor(p.Type.Name, p.Type.IsArray)
@@ -552,20 +552,37 @@ func (c *KrakatauGen) VisitFieldAccess(field *text.FieldAccess) {
 func (c *KrakatauGen) VisitArrayAccess(*text.ArrayAccess)       {}
 func (c *KrakatauGen) VisitAfterArrayAccess(*text.ArrayAccess)  {}
 func (c *KrakatauGen) VisitArrayAccessDelegate(text.NamedValue) {}
-func (c *KrakatauGen) VisitMethodCall(*text.MethodCall)         {}
+func (c *KrakatauGen) VisitMethodCall(method *text.MethodCall) {
+	c.hasField = method.Child != nil
+}
+
 func (c *KrakatauGen) VisitAfterMethodCall(method *text.MethodCall) {
 	if c.isObjectCreation {
 		c.isObjectCreation = false
 		return
 	}
 
-	var typeof, paramSignature, returnType string
+	methodArgs := make([]string, len(method.Args))
+	args := make([]string, len(method.Args))
+	for i := 0; i < len(method.Args); i++ {
+		dt, _ := c.typeStack.Pop()
+		args[i] = fieldDescriptor(dt.dataType.name, dt.isArray)
+		methodArgs[i] = dt.String()
+	}
+	methodSignature := fmt.Sprintf("%s(%s)", method.Name, strings.Join(methodArgs, ", "))
+	paramSignature := strings.Join(args, "")
+
+	dt, _ := c.typeStack.Pop()
+	typeof := dt.dataType.name
+	methodSymbol := dt.dataType.LookupMethod(methodSignature)
+	returnType := fieldDescriptor(methodSymbol.Type().dataType.name, methodSymbol.isArray)
 	c.AppendCode(fmt.Sprintf("invokevirtual Method %s %s (%s)%s",
 		typeof,
 		method.Name,
 		paramSignature,
 		returnType,
 	))
+	c.typeStack.Push(methodSymbol.Type())
 }
 
 func (c *KrakatauGen) VisitArrayCreation(*text.ArrayCreation)      {}
