@@ -268,6 +268,9 @@ func (n *NameAnalyzer) VisitStatementList(text.StatementList) {
 }
 
 func (n *NameAnalyzer) VisitAfterStatementList() {
+
+	// every popped is added to the tables again, so the access could be linear
+	n.Tables = append(n.Tables, n.scope.parent)
 	// pop scope
 	n.scope = *n.scope.parent
 }

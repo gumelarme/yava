@@ -274,6 +274,7 @@ func (c *KrakatauGen) VisitInterface(*text.Interface)                     {}
 func (c *KrakatauGen) VisitPropertyDeclaration(*text.PropertyDeclaration) {}
 func (c *KrakatauGen) VisitMethodSignature(signature *text.MethodSignature) {
 	c.incScopeIndex()
+	c.isScopeCreated = true
 	c.localCount = 1
 	params := make([]string, len(signature.ParameterList))
 	for i, p := range signature.ParameterList {
@@ -345,6 +346,7 @@ func (c *KrakatauGen) VisitStatementList(text.StatementList) {
 }
 func (c *KrakatauGen) VisitAfterStatementList() {
 	c.isScopeCreated = false
+	c.incScopeIndex()
 }
 
 func (c *KrakatauGen) VisitSwitchStatement(*text.SwitchStatement)      {}
@@ -410,12 +412,10 @@ func (c *KrakatauGen) VisitAfterJumpStatement(jump *text.JumpStatement) {
 		return
 	}
 
-	//FIXME this is only works for constant, further type analysis needed
-	name, _ := jump.ChildNode().NodeContent()
-	switch name {
-	case "int", "boolean", "char":
+	data, _ := c.typeStack.Pop()
+	if IsPrimitive(data) {
 		c.AppendCode("ireturn")
-	default:
+	} else {
 		c.AppendCode("areturn")
 	}
 }
