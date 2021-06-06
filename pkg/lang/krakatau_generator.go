@@ -146,6 +146,7 @@ type KrakatauGen struct {
 	isScopeCreated bool
 	scopeIndex     int
 	typeStack      TypeStack
+	isAssignment   bool
 }
 
 func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauGen {
@@ -162,6 +163,7 @@ func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauG
 		false,
 		-1,
 		TypeStack{},
+		false,
 	}
 }
 
@@ -399,12 +401,21 @@ func (c *KrakatauGen) VisitForStatement(forStmt *text.ForStatement) {
 		c.isScopeCreated = true
 	}
 }
-func (c *KrakatauGen) VisitAfterForStatementCondition(*text.ForStatement)      {}
-func (c *KrakatauGen) VisitWhileStatement(*text.WhileStatement)                {}
-func (c *KrakatauGen) VisitAfterWhileStatementCondition(*text.WhileStatement)  {}
-func (c *KrakatauGen) VisitAssignmentStatement(*text.AssignmentStatement)      {}
-func (c *KrakatauGen) VisitAfterAssignmentStatement(*text.AssignmentStatement) {}
-func (c *KrakatauGen) VisitJumpStatement(*text.JumpStatement)                  {}
+func (c *KrakatauGen) VisitAfterForStatementCondition(*text.ForStatement)     {}
+func (c *KrakatauGen) VisitWhileStatement(*text.WhileStatement)               {}
+func (c *KrakatauGen) VisitAfterWhileStatementCondition(*text.WhileStatement) {}
+func (c *KrakatauGen) VisitAssignmentStatement(*text.AssignmentStatement) {
+	c.isAssignment = true
+}
+func (c *KrakatauGen) VisitAfterAssignmentStatement(a *text.AssignmentStatement) {
+	defer func() { c.isAssignment = false }()
+	if a.Left.ChildNode() == nil {
+		field := a.Left.(*text.FieldAccess)
+		local := c.Lookup(field.Name)
+		c.AppendCode(loadOrStore(local, Store))
+	}
+}
+func (c *KrakatauGen) VisitJumpStatement(*text.JumpStatement) {}
 func (c *KrakatauGen) VisitAfterJumpStatement(jump *text.JumpStatement) {
 	defer c.decStackSize(1)
 	if jump.ChildNode() == nil {
@@ -421,6 +432,11 @@ func (c *KrakatauGen) VisitAfterJumpStatement(jump *text.JumpStatement) {
 }
 
 func (c *KrakatauGen) VisitFieldAccess(field *text.FieldAccess) {
+	if c.isAssignment {
+		c.isAssignment = false
+		return
+	}
+
 	local := c.Lookup(field.Name)
 	c.typeStack.Push(local.Member.Type())
 	c.AppendCode(loadOrStore(local, Load))

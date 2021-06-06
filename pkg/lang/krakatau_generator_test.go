@@ -719,3 +719,39 @@ func TestKrakatauGen_FieldAccess(t *testing.T) {
 		})
 	}
 }
+
+func TestKrakatauGen_AssignmentStatement(t *testing.T) {
+	var eq text.Token
+	eq.Type = text.Assignment
+
+	data := []struct {
+		symbol     Local
+		assignment text.AssignmentStatement
+		expect     []string
+	}{
+		{
+			Local{&FieldSymbol{mockInt, "count"}, 1},
+			text.AssignmentStatement{Operator: eq,
+				Left:  &text.FieldAccess{Name: "count", Child: nil},
+				Right: text.Num(1),
+			},
+			[]string{
+				"iconst_1",
+				"istore_1",
+			},
+		},
+	}
+
+	for _, d := range data {
+		mockKrakatau(func(gen *KrakatauGen) {
+			table := NewSymbolTable("mock", 0, nil)
+			table.Insert(d.symbol.Member, d.symbol.address)
+			gen.scopeIndex = 0
+			gen.symbolTable = []*SymbolTable{
+				&table,
+			}
+			d.assignment.Accept(gen)
+			assertHasSameCodes(t, gen, d.expect...)
+		})
+	}
+}

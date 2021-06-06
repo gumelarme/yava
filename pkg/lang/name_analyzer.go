@@ -323,14 +323,15 @@ func (n *NameAnalyzer) VisitAfterWhileStatementCondition(*text.WhileStatement) {
 }
 func (n *NameAnalyzer) VisitAssignmentStatement(*text.AssignmentStatement) {}
 func (n *NameAnalyzer) VisitAfterAssignmentStatement(*text.AssignmentStatement) {
+	targetType, _ := n.stack.Pop()
 	rightType, _ := n.stack.Pop()
 
-	if IsNullOk(n.curField.Type()) && rightType.Name() == "null" {
+	if IsNullOk(targetType) && rightType.Name() == "null" {
 		return
 	}
 
-	if !rightType.Equals(n.curField.Type()) {
-		n.AddErrorf(msgExpectingTypeof, n.curField.Type(), rightType)
+	if !rightType.Equals(targetType) {
+		n.AddErrorf(msgExpectingTypeof, targetType, rightType)
 	}
 }
 
@@ -356,7 +357,9 @@ func (n *NameAnalyzer) VisitFieldAccess(field *text.FieldAccess) {
 		if sym == nil {
 			n.AddErrorf(msgVariableDoesNotExist, field.Name)
 		} else {
-			n.curField = sym
+			if field.Child != nil {
+				n.curField = sym
+			}
 			n.stack.Push(sym.Type())
 		}
 		return
@@ -538,5 +541,8 @@ func (n *NameAnalyzer) VisitConstant(ex text.Expression) {
 	}
 }
 
-func (n *NameAnalyzer) VisitSystemOut()      {}
-func (n *NameAnalyzer) VisitAfterSystemOut() {}
+func (n *NameAnalyzer) VisitSystemOut() {}
+func (n *NameAnalyzer) VisitAfterSystemOut() {
+	n.curField = nil
+	n.stack.Pop()
+}
