@@ -874,6 +874,24 @@ func TestKrakatauGen_AssignmentStatement(t *testing.T) {
 				"istore_1",
 			},
 		},
+		{
+			Local{&FieldSymbol{mockHuman, "human"}, 3},
+			text.AssignmentStatement{Operator: eq,
+				Left: &text.FieldAccess{
+					Name: "human",
+					Child: &text.FieldAccess{
+						Name:  "age",
+						Child: nil,
+					},
+				},
+				Right: text.Num(1),
+			},
+			[]string{
+				"aload_3",
+				"iconst_1",
+				"putfield Field Human age I",
+			},
+		},
 	}
 
 	for _, d := range data {
@@ -884,6 +902,10 @@ func TestKrakatauGen_AssignmentStatement(t *testing.T) {
 			gen.symbolTable = []*SymbolTable{
 				&table,
 			}
+
+			gen.typeTable = NewTypeAnalyzer().table
+			gen.typeTable["Human"] = mockHuman.dataType
+
 			d.assignment.Accept(gen)
 			assertHasSameCodes(t, gen, d.expect...)
 		})

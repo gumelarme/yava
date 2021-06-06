@@ -479,8 +479,31 @@ func (c *KrakatauGen) VisitAfterAssignmentStatement(a *text.AssignmentStatement)
 		field := a.Left.(*text.FieldAccess)
 		local := c.Lookup(field.Name)
 		c.AppendCode(loadOrStore(local, Store))
+		return
 	}
+
+	lastField := a.Left
+	field := lastField.(*text.FieldAccess)
+	local := c.Lookup(field.Name)
+	for {
+		if lastField.ChildNode() != nil && lastField.ChildNode().ChildNode() == nil {
+			break
+		}
+		lastField = lastField.GetChild()
+		field := lastField.(*text.FieldAccess)
+		local = c.Lookup(field.Name)
+	}
+
+	field = lastField.GetChild().(*text.FieldAccess)
+	typeOfField := c.typeTable.Lookup(local.Member.Type().dataType.name)
+	prop := typeOfField.LookupProperty(field.Name)
+	c.AppendCode(fmt.Sprintf("putfield Field %s %s %s",
+		local.Member.Type().dataType.name,
+		field.Name,
+		fieldDescriptor(prop.dataType.name, prop.isArray),
+	))
 }
+
 func (c *KrakatauGen) VisitJumpStatement(*text.JumpStatement) {}
 func (c *KrakatauGen) VisitAfterJumpStatement(jump *text.JumpStatement) {
 	defer c.decStackSize(1)
@@ -499,12 +522,10 @@ func (c *KrakatauGen) VisitAfterJumpStatement(jump *text.JumpStatement) {
 
 func (c *KrakatauGen) VisitFieldAccess(field *text.FieldAccess) {
 	defer func() {
-		if field.Child != nil {
-			c.hasField = true
-		}
+		c.hasField = field.Child != nil
 	}()
 
-	if c.isAssignment {
+	if c.isAssignment && field.Child == nil {
 		c.isAssignment = false
 		return
 	}

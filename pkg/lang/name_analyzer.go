@@ -132,7 +132,6 @@ func (n *NameAnalyzer) VisitClass(class *text.Class) {
 		n.localCount = 0
 		n.Insert(method)
 	}
-
 	n.stack.Push(DataType{
 		classType,
 		false,
@@ -385,7 +384,12 @@ func (n *NameAnalyzer) VisitFieldAccess(field *text.FieldAccess) {
 		return
 	}
 
-	n.curField = subField
+	if field.Child != nil {
+		n.curField = subField
+	} else {
+		n.curField = nil
+	}
+
 	n.stack.Overwrite(subField.DataType)
 }
 
