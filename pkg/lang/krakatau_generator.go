@@ -635,12 +635,19 @@ func (c *KrakatauGen) VisitAfterBinOp(bin *text.BinOp) {
 }
 
 func (c *KrakatauGen) VisitConstant(e text.Expression) {
+	defer c.incStackSize(1)
 	typename, _ := e.NodeContent()
-	symbol := c.typeTable.Lookup(typename)
-	c.typeStack.Push(DataType{symbol, false})
+	if typename != "this" {
+		symbol := c.typeTable.Lookup(typename)
+		c.typeStack.Push(DataType{symbol, false})
+		c.AppendCode(codeConstant(e))
+		return
+	}
 
-	c.incStackSize(1)
-	c.AppendCode(codeConstant(e))
+	local := c.Lookup("this")
+	c.hasField = true
+	c.AppendCode("aload_0")
+	c.typeStack.Push(local.Member.Type())
 }
 
 func (c *KrakatauGen) VisitSystemOut() {

@@ -999,3 +999,65 @@ func TestKrakatauGen_MethodCall(t *testing.T) {
 		})
 	}
 }
+
+func TestKrakatauGen_This(t *testing.T) {
+	data := []struct {
+		namedValue text.NamedValue
+		expect     []string
+	}{
+		{
+			&text.This{Child: &text.FieldAccess{Name: "age", Child: nil}},
+			[]string{
+				"aload_0",
+				"getfield Field Human age I",
+			},
+		},
+		{
+			&text.This{Child: &text.MethodCall{
+				Name: "getName",
+				Args: []text.Expression{
+					text.String("Hello"),
+				},
+				Child: nil,
+			}},
+			[]string{
+				"aload_0",
+				`ldc "Hello"`,
+				"invokevirtual Method Human getName (Ljava/lang/String;)I",
+			},
+		},
+	}
+
+	human := mockHuman.dataType
+	human.Properties["age"] = &PropertySymbol{
+		propAge.AccessModifier,
+		FieldSymbol{
+			mockInt,
+			"age",
+		},
+	}
+
+	human.Methods[methodGetAge.Signature()] = NewMethodSymbol(methodGetAge.MethodSignature, *mockInt.dataType)
+	human.Methods[methodGetNameWithParam.Signature()] = NewMethodSymbol(methodGetName.MethodSignature, *mockInt.dataType)
+
+	for _, d := range data {
+		mockKrakatau(func(gen *KrakatauGen) {
+			gen.typeTable = NewTypeAnalyzer().table
+			gen.typeTable["Human"] = human
+
+			table := NewSymbolTable("mock", 0, nil)
+			table.Insert(&PropertySymbol{
+				text.Public,
+				FieldSymbol{mockHuman, "this"},
+			}, 0)
+
+			gen.scopeIndex = 0
+			gen.symbolTable = []*SymbolTable{
+				&table,
+			}
+
+			d.namedValue.Accept(gen)
+			assertHasSameCodes(t, gen, d.expect...)
+		})
+	}
+}
