@@ -822,6 +822,18 @@ func TestKrakatauGen_FieldAccess(t *testing.T) {
 				"iload 12",
 			},
 		},
+		{
+			Local{&FieldSymbol{mockHuman, "human"}, 1},
+			text.FieldAccess{Name: "human",
+				Child: &text.FieldAccess{
+					Name:  "age",
+					Child: nil,
+				}},
+			[]string{
+				"aload_1",
+				"getfield Field Human age I",
+			},
+		},
 	}
 
 	for _, d := range data {
@@ -832,6 +844,10 @@ func TestKrakatauGen_FieldAccess(t *testing.T) {
 			gen.symbolTable = []*SymbolTable{
 				&table,
 			}
+
+			gen.typeTable = NewTypeAnalyzer().table
+			gen.typeTable["Human"] = mockHuman.dataType
+
 			d.varDecl.Accept(gen)
 			assertHasSameCodes(t, gen, d.expect...)
 		})

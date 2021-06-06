@@ -149,6 +149,7 @@ type KrakatauGen struct {
 	typeStack        TypeStack
 	isAssignment     bool
 	isObjectCreation bool
+	hasField         bool
 }
 
 func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauGen {
@@ -165,6 +166,7 @@ func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauG
 		false,
 		-1,
 		TypeStack{},
+		false,
 		false,
 		false,
 	}
@@ -496,15 +498,34 @@ func (c *KrakatauGen) VisitAfterJumpStatement(jump *text.JumpStatement) {
 }
 
 func (c *KrakatauGen) VisitFieldAccess(field *text.FieldAccess) {
+	defer func() {
+		if field.Child != nil {
+			c.hasField = true
+		}
+	}()
+
 	if c.isAssignment {
 		c.isAssignment = false
 		return
 	}
 
-	local := c.Lookup(field.Name)
-	c.typeStack.Push(local.Member.Type())
-	c.AppendCode(loadOrStore(local, Load))
-	c.incStackSize(1)
+	if !c.hasField {
+		local := c.Lookup(field.Name)
+		c.typeStack.Push(local.Member.Type())
+		c.AppendCode(loadOrStore(local, Load))
+		c.incStackSize(1)
+		return
+	}
+
+	dt, _ := c.typeStack.Pop()
+	prop := dt.dataType.LookupProperty(field.Name)
+
+	c.AppendCode(fmt.Sprintf("getfield Field %s %s %s",
+		dt.dataType.name,
+		prop.name,
+		fieldDescriptor(prop.dataType.name, prop.isArray),
+	))
+	c.typeStack.Push(prop.DataType)
 }
 
 func (c *KrakatauGen) VisitArrayAccess(*text.ArrayAccess)       {}
