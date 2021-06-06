@@ -873,3 +873,32 @@ func TestKrakatauGen_AssignmentStatement(t *testing.T) {
 		})
 	}
 }
+
+func TestKrakatau_ObjecCreation(t *testing.T) {
+	data := []struct {
+		obj    text.ObjectCreation
+		expect []string
+	}{
+		{
+			text.ObjectCreation{
+				text.MethodCall{
+					Name:  "Human",
+					Args:  []text.Expression{},
+					Child: nil,
+				},
+			},
+			[]string{
+				"new Human",
+				"dup",
+				"invokespecial Method Human <init> ()V",
+			},
+		},
+	}
+
+	for _, d := range data {
+		mockKrakatau(func(gen *KrakatauGen) {
+			gen.VisitObjectCreation(&d.obj)
+			assertHasSameCodes(t, gen, d.expect...)
+		})
+	}
+}

@@ -135,19 +135,20 @@ func fieldDescriptor(name string, isArray bool) (result string) {
 }
 
 type KrakatauGen struct {
-	stackMax       int
-	stackSize      int
-	localCount     int
-	labelCount     int
-	outerLabel     int
-	codes          []string
-	codeBuffer     []string
-	typeTable      TypeTable
-	symbolTable    []*SymbolTable
-	isScopeCreated bool
-	scopeIndex     int
-	typeStack      TypeStack
-	isAssignment   bool
+	stackMax         int
+	stackSize        int
+	localCount       int
+	labelCount       int
+	outerLabel       int
+	codes            []string
+	codeBuffer       []string
+	typeTable        TypeTable
+	symbolTable      []*SymbolTable
+	isScopeCreated   bool
+	scopeIndex       int
+	typeStack        TypeStack
+	isAssignment     bool
+	isObjectCreation bool
 }
 
 func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauGen {
@@ -164,6 +165,7 @@ func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauG
 		false,
 		-1,
 		TypeStack{},
+		false,
 		false,
 	}
 }
@@ -510,6 +512,11 @@ func (c *KrakatauGen) VisitAfterArrayAccess(*text.ArrayAccess)  {}
 func (c *KrakatauGen) VisitArrayAccessDelegate(text.NamedValue) {}
 func (c *KrakatauGen) VisitMethodCall(*text.MethodCall)         {}
 func (c *KrakatauGen) VisitAfterMethodCall(method *text.MethodCall) {
+	if c.isObjectCreation {
+		c.isObjectCreation = false
+		return
+	}
+
 	var typeof, paramSignature, returnType string
 	c.AppendCode(fmt.Sprintf("invokevirtual Method %s %s (%s)%s",
 		typeof,
@@ -517,13 +524,20 @@ func (c *KrakatauGen) VisitAfterMethodCall(method *text.MethodCall) {
 		paramSignature,
 		returnType,
 	))
-
 }
 
 func (c *KrakatauGen) VisitArrayCreation(*text.ArrayCreation)      {}
 func (c *KrakatauGen) VisitAfterArrayCreation(*text.ArrayCreation) {}
-func (c *KrakatauGen) VisitObjectCreation(*text.ObjectCreation)    {}
-func (c *KrakatauGen) VisitBinOp(*text.BinOp)                      {}
+func (c *KrakatauGen) VisitObjectCreation(obj *text.ObjectCreation) {
+	c.isObjectCreation = true
+	c.AppendCode(fmt.Sprintf("new %s", obj.Name))
+	c.AppendCode("dup")
+	c.incStackSize(2)
+
+	c.AppendCode(fmt.Sprintf("invokespecial Method %s <init> ()V", obj.Name))
+	c.decStackSize(1)
+}
+func (c *KrakatauGen) VisitBinOp(*text.BinOp) {}
 
 var opString = map[text.TokenType]string{
 	text.Addition:         "iadd",
@@ -575,10 +589,19 @@ func (c *KrakatauGen) VisitSystemOut() {
 	c.incStackSize(1)
 }
 
+func sysOutDescriptor(dt DataType) string {
+	if IsPrimitive(dt) {
+		return fieldDescriptor(dt.dataType.name, dt.isArray)
+	} else if dt.dataType == PrimitiveString && dt.isArray == false {
+		return "Ljava/lang/String;"
+	} else {
+		return "Ljava/lang/Object;"
+	}
+}
+
 func (c *KrakatauGen) VisitAfterSystemOut() {
-	// FIXME: determine the type using name analyzer, type symbol
 	dt, _ := c.typeStack.Pop()
-	argtype := fieldDescriptor(dt.dataType.name, dt.isArray)
+	argtype := sysOutDescriptor(dt)
 	invoke := fmt.Sprintf("invokevirtual Method java/io/PrintStream println (%s)V", argtype)
 	c.AppendCode(invoke)
 	c.decStackSize(2)
