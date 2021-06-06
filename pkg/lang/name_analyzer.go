@@ -124,10 +124,12 @@ func (n *NameAnalyzer) VisitClass(class *text.Class) {
 	n.newScope(name)
 	classType := n.typeTable[class.Name]
 	for _, prop := range classType.Properties {
+		n.localCount = 0
 		n.Insert(prop)
 	}
 
 	for _, method := range classType.Methods {
+		n.localCount = 0
 		n.Insert(method)
 	}
 

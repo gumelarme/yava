@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	MajorVersion = 49
-	MinorVersion = 0
+	MajorVersion     = 49
+	MinorVersion     = 0
+	InvokeJavaObject = "invokespecial Method java/lang/Object <init> ()V"
 )
 
 func isMathOperator(token text.TokenType) bool {
@@ -246,6 +247,17 @@ func (c *KrakatauGen) isCodeEndsWithReturn() bool {
 		return false
 	}
 }
+
+func (c *KrakatauGen) getDefaultInitialization(t text.NamedType) (DataType, string) {
+	typeof := c.typeTable.Lookup(t.Name)
+	dt := DataType{typeof, t.IsArray}
+	if IsPrimitive(dt) {
+		return dt, "iconst_0"
+	} else {
+		return dt, "aconst_null"
+	}
+}
+
 func (c *KrakatauGen) VisitProgram(program text.Program) {
 	c.Append(fmt.Sprintf(".version %d %d", MajorVersion, MinorVersion))
 }
@@ -268,12 +280,67 @@ func (c *KrakatauGen) VisitClass(class *text.Class) {
 		c.Append(fmt.Sprintf(".implements %s", class.Implement))
 	}
 }
-func (c *KrakatauGen) VisitAfterClass(*text.Class) {
+
+func (c *KrakatauGen) VisitAfterClass(class *text.Class) {
+	c.makeDefaultConstructor(class.Name, class.Properties...)
 	c.Append(".end class")
 }
 
-func (c *KrakatauGen) VisitInterface(*text.Interface)                     {}
-func (c *KrakatauGen) VisitPropertyDeclaration(*text.PropertyDeclaration) {}
+func (c *KrakatauGen) VisitInterface(*text.Interface) {}
+func (c *KrakatauGen) VisitPropertyDeclaration(prop *text.PropertyDeclaration) {
+	c.Append(fmt.Sprintf(".field %s %s %s",
+		prop.AccessModifier,
+		prop.Name,
+		fieldDescriptor(prop.Type.Name, prop.Type.IsArray),
+	))
+}
+
+func (c *KrakatauGen) makeDefaultConstructor(className string, prop ...*text.PropertyDeclaration) {
+	c.localCount = 1
+	// FIXME: Do something about the parameter
+	header := fmt.Sprintf(".method <init> : (%s)V", "")
+	c.Append(header)
+
+	c.AppendCode("aload_0")
+	c.AppendCode(InvokeJavaObject)
+	c.incStackSize(1)
+	c.decStackSize(1)
+
+	for _, p := range prop {
+		c.AppendCode("aload_0")
+		c.incStackSize(1)
+
+		if p.Value == nil {
+			dt, code := c.getDefaultInitialization(p.Type)
+			c.AppendCode(code)
+			c.typeStack.Push(dt)
+			c.incStackSize(1)
+		} else {
+			p.Value.Accept(c)
+		}
+
+		c.AppendCode(fmt.Sprintf("putfield Field %s %s %s",
+			className,
+			p.Name,
+			fieldDescriptor(p.Type.Name, p.Type.IsArray),
+		))
+		// remove aload_0 and the value
+		c.decStackSize(2)
+	}
+
+	c.AppendCode("return")
+	//count stack
+	c.Append(fmt.Sprintf(".code stack %d locals %d", c.stackMax, c.localCount))
+
+	for _, code := range c.codeBuffer {
+		c.Append(code)
+	}
+
+	c.codeBuffer = []string{}
+	c.Append(".end code")
+	c.Append(".end method")
+}
+
 func (c *KrakatauGen) VisitMethodSignature(signature *text.MethodSignature) {
 	c.incScopeIndex()
 	c.isScopeCreated = true
@@ -326,14 +393,9 @@ func (c *KrakatauGen) VisitVariableDeclaration(v *text.VariableDeclaration) {}
 func (c *KrakatauGen) VisitAfterVariableDeclaration(varDecl *text.VariableDeclaration) {
 	// assign default value
 	if varDecl.Value == nil {
-		typeof := c.typeTable.Lookup(varDecl.Type.Name)
-		dt := DataType{typeof, varDecl.Type.IsArray}
-		if IsPrimitive(dt) {
-			c.AppendCode("iconst_0")
-		} else {
-			c.AppendCode("aconst_null")
-		}
 		c.incStackSize(1)
+		dt, code := c.getDefaultInitialization(varDecl.Type)
+		c.AppendCode(code)
 		c.typeStack.Push(dt)
 	}
 

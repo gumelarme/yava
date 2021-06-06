@@ -949,9 +949,9 @@ func (p *PropertyDeclaration) TypeOf() NamedType {
 
 func (p *PropertyDeclaration) Accept(visitor Visitor) {
 	visitor.VisitPropertyDeclaration(p)
-	if p.Value != nil {
-		p.Value.Accept(visitor)
-	}
+	// if p.Value != nil {
+	// 	p.Value.Accept(visitor)
+	// }
 }
 
 type Parameter struct {

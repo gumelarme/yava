@@ -210,10 +210,128 @@ func TestKrakatauGen_Class(t *testing.T) {
 }
 
 func TestKrakatauGen_AfterClass(t *testing.T) {
-	var class *text.Class
+	var class text.Class
+	class.Name = "Mock"
+
 	gen := NewEmptyKrakatauGen()
-	gen.VisitAfterClass(class)
-	assertHasSameCodes(t, gen, ".end class")
+	gen.VisitAfterClass(&class)
+	assertHasSameCodes(t, gen,
+		".method <init> : ()V",
+		".code stack 1 locals 1",
+		"aload_0",
+		InvokeJavaObject,
+		"return",
+		".end code",
+		".end method",
+		".end class",
+	)
+}
+
+func TestKrakatauGen_PropertyDeclaration(t *testing.T) {
+	data := []struct {
+		prop   text.PropertyDeclaration
+		expect []string
+	}{
+		{
+			text.PropertyDeclaration{
+				AccessModifier: text.Public,
+				VariableDeclaration: text.VariableDeclaration{
+					Type:  text.NamedType{Name: "int", IsArray: false},
+					Name:  "age",
+					Value: nil,
+				},
+			},
+			[]string{
+				".field public age I",
+			},
+		},
+		{
+			text.PropertyDeclaration{
+				AccessModifier: text.Public,
+				VariableDeclaration: text.VariableDeclaration{
+					Type:  text.NamedType{Name: "int", IsArray: true},
+					Name:  "age",
+					Value: nil,
+				},
+			},
+			[]string{
+				".field public age [I",
+			},
+		},
+		{
+			text.PropertyDeclaration{
+				AccessModifier: text.Private,
+				VariableDeclaration: text.VariableDeclaration{
+					Type:  text.NamedType{Name: "String", IsArray: false},
+					Name:  "name",
+					Value: nil,
+				},
+			},
+			[]string{
+				".field private name Ljava/lang/String;",
+			},
+		},
+	}
+
+	for _, d := range data {
+		mockKrakatau(func(gen *KrakatauGen) {
+			gen.VisitPropertyDeclaration(&d.prop)
+			assertHasSameCodes(t, gen, d.expect...)
+		})
+	}
+}
+
+func TestKrakataugGen_makeDefaultConstructor(t *testing.T) {
+	className := "Mock"
+	mockKrakatau(func(gen *KrakatauGen) {
+		typeTable := NewTypeAnalyzer().table
+		gen.typeTable = typeTable
+		gen.makeDefaultConstructor(className,
+			&text.PropertyDeclaration{
+				AccessModifier: text.Public,
+				VariableDeclaration: text.VariableDeclaration{
+					Type:  text.NamedType{Name: "int", IsArray: false},
+					Name:  "intProp",
+					Value: nil,
+				},
+			},
+			&text.PropertyDeclaration{
+				AccessModifier: text.Public,
+				VariableDeclaration: text.VariableDeclaration{
+					Type:  text.NamedType{Name: "String", IsArray: false},
+					Name:  "stringProp",
+					Value: nil,
+				},
+			},
+			&text.PropertyDeclaration{
+				AccessModifier: text.Public,
+				VariableDeclaration: text.VariableDeclaration{
+					Type:  text.NamedType{Name: "int", IsArray: false},
+					Name:  "age",
+					Value: text.Num(4000),
+				},
+			},
+		)
+
+		assertHasSameCodes(t, gen,
+			".method <init> : ()V",
+			".code stack 2 locals 1",
+			"aload_0",
+			InvokeJavaObject,
+			"aload_0",
+			"iconst_0",
+			"putfield Field Mock intProp I",
+			"aload_0",
+			"aconst_null",
+			"putfield Field Mock stringProp Ljava/lang/String;",
+			"aload_0",
+			"ldc 4000",
+			"putfield Field Mock age I",
+			"return",
+			".end code",
+			".end method",
+		)
+	})
 }
 
 func TestKrakatauGen_AfterBinOp(t *testing.T) {
