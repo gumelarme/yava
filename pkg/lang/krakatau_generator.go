@@ -230,6 +230,8 @@ func (c *KrakatauGen) Lookup(name string) Local {
 func (c *KrakatauGen) incScopeIndex() {
 	if !c.isScopeCreated {
 		c.scopeIndex += 1
+	} else {
+		c.isScopeCreated = false
 	}
 }
 
@@ -478,13 +480,48 @@ func (c *KrakatauGen) VisitAfterIfStatement(ifStmt *text.IfStatement) {
 }
 
 func (c *KrakatauGen) VisitForStatement(forStmt *text.ForStatement) {
+	if forStmt.Init == nil {
+		return
+	}
+
 	name, _ := forStmt.Init.NodeContent()
 	if name == "var-decl" {
 		c.incScopeIndex()
 		c.isScopeCreated = true
 	}
 }
-func (c *KrakatauGen) VisitAfterForStatementCondition(*text.ForStatement) {}
+
+func (c *KrakatauGen) VisitAfterForStatementInit(forStmt *text.ForStatement) {
+	conditionLabel := c.getLabel()
+	c.loopHead.Push(conditionLabel)
+	c.AppendCode(labelCode("", conditionLabel))
+}
+func (c *KrakatauGen) VisitAfterForStatementCondition(forStmt *text.ForStatement) {
+	body, outer := c.getLabel(), c.getLabel()
+	c.loopOuter.Push(outer)
+	c.AppendCode(fmt.Sprintf("ifne L%d", body))
+	c.AppendCode(gotoLabel(outer))
+	c.AppendCode(labelCode("", body))
+
+	if forStmt.Update != nil {
+		forUpdateLabel := c.getLabel()
+		c.loopHead.Push(forUpdateLabel)
+	}
+}
+
+func (c *KrakatauGen) VisitBeforeForStatementUpdate(forStmt *text.ForStatement) {
+	forUpdateLabel := c.loopHead.Pop()
+	c.AppendCode(labelCode("", forUpdateLabel))
+}
+func (c *KrakatauGen) VisitAfterForStatement(forStmt *text.ForStatement) {
+	conditionLabel := c.loopHead.Pop()
+	c.AppendCode(gotoLabel(conditionLabel))
+
+	if forStmt.Condition != nil {
+		c.AppendCode(labelCode("", c.loopOuter.Pop()))
+	}
+}
+
 func (c *KrakatauGen) VisitWhileStatement(*text.WhileStatement) {
 	head := c.getLabel()
 	c.AppendCode(labelCode("", head))
@@ -548,14 +585,14 @@ func (c *KrakatauGen) VisitJumpStatement(*text.JumpStatement) {}
 func (c *KrakatauGen) VisitAfterJumpStatement(jump *text.JumpStatement) {
 	// assume its inside a loop
 	if jump.Type != text.ReturnJump {
-		labelSource := c.loopHead
+		labelSource := &c.loopHead
 		if jump.Type == text.BreakJump {
-			labelSource = c.loopOuter
+			labelSource = &c.loopOuter
 		}
 
 		lbl := labelSource.Pop()
 		c.AppendCode(gotoLabel(lbl))
-		c.loopHead.Push(lbl) //put it back
+		labelSource.Push(lbl) //put it back
 		return
 	}
 

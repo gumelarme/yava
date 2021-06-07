@@ -189,8 +189,14 @@ func (n *NameAnalyzer) VisitMethodSignature(sign *text.MethodSignature) {
 
 }
 
-func (n *NameAnalyzer) VisitMethodDeclaration(*text.MethodDeclaration)         {}
-func (n *NameAnalyzer) VisitMainMethodDeclaration(*text.MainMethodDeclaration) {}
+func (n *NameAnalyzer) VisitMethodDeclaration(*text.MethodDeclaration) {}
+func (n *NameAnalyzer) VisitMainMethodDeclaration(*text.MainMethodDeclaration) {
+	returnType := DataType{
+		NewType("void", Primitive),
+		false,
+	}
+	n.stack.Push(returnType)
+}
 func (n *NameAnalyzer) VisitAfterMethodDeclaration(*text.MethodDeclaration) {
 	//popping method return type
 	n.stack.Pop()
@@ -316,12 +322,14 @@ func (n *NameAnalyzer) VisitForStatement(forStmt *text.ForStatement) {
 	}
 }
 
+func (n *NameAnalyzer) VisitAfterForStatementInit(*text.ForStatement) {}
 func (n *NameAnalyzer) VisitAfterForStatementCondition(forStmt *text.ForStatement) {
 	n.expectLastStackTypeOf("int", false)
 }
-
-func (n *NameAnalyzer) VisitWhileStatement(*text.WhileStatement)      {}
-func (n *NameAnalyzer) VisitAfterWhileStatement(*text.WhileStatement) {}
+func (n *NameAnalyzer) VisitBeforeForStatementUpdate(*text.ForStatement) {}
+func (n *NameAnalyzer) VisitAfterForStatement(*text.ForStatement)        {}
+func (n *NameAnalyzer) VisitWhileStatement(*text.WhileStatement)         {}
+func (n *NameAnalyzer) VisitAfterWhileStatement(*text.WhileStatement)    {}
 func (n *NameAnalyzer) VisitAfterWhileStatementCondition(*text.WhileStatement) {
 	n.expectLastStackTypeOf("boolean", false)
 }

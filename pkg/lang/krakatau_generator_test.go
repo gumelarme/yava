@@ -1170,3 +1170,130 @@ func TestKrakatauGen_Break_Continue(t *testing.T) {
 	})
 
 }
+
+func TestKrakatauGen_ForStatement(t *testing.T) {
+	var assign text.Token
+	assign.Type = text.Assignment
+
+	data := []struct {
+		local   Local
+		forStmt text.ForStatement
+		expect  []string
+	}{
+		{
+			Local{&FieldSymbol{mockInt, "i"}, 1},
+			text.ForStatement{
+				Init:      nil,
+				Condition: nil,
+				Update:    nil,
+				Body:      text.StatementList{},
+			},
+			[]string{
+				"L0:\t",
+				"goto L0",
+			},
+		},
+		{
+			Local{&FieldSymbol{mockInt, "i"}, 1},
+			text.ForStatement{
+				Init:      nil,
+				Condition: nil,
+				Update:    nil,
+				Body: text.StatementList{
+					&text.MethodCallStatement{
+						Method: mockSysout(text.Num(1)),
+					},
+				},
+			},
+			[]string{
+				"L0:\t",
+				"getstatic Field java/lang/System out Ljava/io/PrintStream;",
+				"iconst_1",
+				"invokevirtual Method java/io/PrintStream println (I)V",
+				"goto L0",
+			},
+		},
+		{
+			Local{&FieldSymbol{mockInt, "i"}, 1},
+			text.ForStatement{
+				Init:      nil,
+				Condition: text.Boolean(true),
+				Update:    nil,
+				Body: text.StatementList{
+					&text.MethodCallStatement{
+						Method: mockSysout(text.Num(1)),
+					},
+				},
+			},
+			[]string{
+				"L0:\t",
+				"iconst_1",
+				"ifne L1",
+				"goto L2",
+				"L1:\t",
+				"getstatic Field java/lang/System out Ljava/io/PrintStream;",
+				"iconst_1",
+				"invokevirtual Method java/io/PrintStream println (I)V",
+				"goto L0",
+				"L2:\t",
+			},
+		},
+		{
+			Local{&FieldSymbol{mockInt, "i"}, 1},
+			text.ForStatement{
+				Init: &text.VariableDeclaration{
+					Type:  text.NamedType{Name: "int", IsArray: false},
+					Name:  "i",
+					Value: text.Num(0),
+				},
+				Condition: text.Boolean(true),
+				Update: &text.AssignmentStatement{
+					Operator: assign,
+					Left:     &text.FieldAccess{Name: "i", Child: nil},
+					Right:    text.Num(1),
+				},
+				Body: text.StatementList{
+					&text.MethodCallStatement{
+						Method: mockSysout(text.Num(1)),
+					},
+				},
+			},
+			[]string{
+				"iconst_0",
+				"istore_1",
+				"L0:\t",
+				"iconst_1",
+				"ifne L1",
+				"goto L2",
+				"L1:\t",
+				"getstatic Field java/lang/System out Ljava/io/PrintStream;",
+				"iconst_1",
+				"invokevirtual Method java/io/PrintStream println (I)V",
+				"L3:\t",
+				"iconst_1",
+				"istore_1",
+				"goto L0",
+				"L2:\t",
+			},
+		},
+	}
+
+	for _, d := range data {
+		mockKrakatau(func(gen *KrakatauGen) {
+			table := NewSymbolTable("mock", 0, nil)
+			table.Insert(d.local.Member, d.local.address)
+			gen.scopeIndex = 0
+
+			// when it has vardecl inside loop
+			// new scope are created, this is why the &table
+			// are added twice
+			gen.symbolTable = []*SymbolTable{
+				&table,
+				&table,
+			}
+
+			d.forStmt.Accept(gen)
+			assertHasSameCodes(t, gen, d.expect...)
+		})
+	}
+}

@@ -235,7 +235,10 @@ func (t *TypeAnalyzer) VisitAfterIfStatementBody(*text.IfStatement)             
 func (t *TypeAnalyzer) VisitAfterElseStatementBody(*text.IfStatement)           {}
 func (t *TypeAnalyzer) VisitAfterIfStatement(*text.IfStatement)                 {}
 func (t *TypeAnalyzer) VisitForStatement(*text.ForStatement)                    {}
+func (t *TypeAnalyzer) VisitAfterForStatementInit(*text.ForStatement)           {}
 func (t *TypeAnalyzer) VisitAfterForStatementCondition(*text.ForStatement)      {}
+func (t *TypeAnalyzer) VisitBeforeForStatementUpdate(*text.ForStatement)        {}
+func (t *TypeAnalyzer) VisitAfterForStatement(*text.ForStatement)               {}
 func (t *TypeAnalyzer) VisitWhileStatement(*text.WhileStatement)                {}
 func (t *TypeAnalyzer) VisitAfterWhileStatementCondition(*text.WhileStatement)  {}
 func (t *TypeAnalyzer) VisitAfterWhileStatement(*text.WhileStatement)           {}

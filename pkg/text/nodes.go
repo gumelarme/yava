@@ -31,7 +31,10 @@ type Visitor interface {
 	VisitAfterElseStatementBody(*IfStatement)
 	VisitAfterIfStatement(*IfStatement)
 	VisitForStatement(*ForStatement)
+	VisitAfterForStatement(*ForStatement)
+	VisitAfterForStatementInit(*ForStatement)
 	VisitAfterForStatementCondition(*ForStatement)
+	VisitBeforeForStatementUpdate(*ForStatement)
 	VisitWhileStatement(*WhileStatement)
 	VisitAfterWhileStatementCondition(*WhileStatement)
 	VisitAfterWhileStatement(*WhileStatement)
@@ -856,27 +859,54 @@ func (f *ForStatement) IsStatement() bool {
 }
 
 func (f *ForStatement) Accept(v Visitor) {
+	defer v.VisitAfterForStatement(f)
+	defer func() {
+		name, _ := f.Body.NodeContent()
+		if name == "block-stmt" {
+			v.VisitAfterStatementList()
+			return
+		}
+
+		if f.Init == nil {
+			return
+		}
+
+		if name, _ := f.Init.NodeContent(); name == "var-decl" {
+			v.VisitAfterStatementList()
+			return
+		}
+	}()
 	v.VisitForStatement(f)
 	if f.Init != nil {
 		f.Init.Accept(v)
-		defer func() {
-			if name, _ := f.Init.NodeContent(); name == "var-decl" {
-				v.VisitAfterStatementList()
-			}
-		}()
 	}
+
+	v.VisitAfterForStatementInit(f)
 
 	if f.Condition != nil {
 		f.Condition.Accept(v)
 		v.VisitAfterForStatementCondition(f)
 	}
 
-	if f.Update != nil {
-		f.Update.Accept(v)
+	if f.Update == nil {
+		f.Body.Accept(v)
+		return
 	}
 
-	f.Body.Accept(v)
-
+	name, _ := f.Body.NodeContent()
+	if name == "stmt-block" {
+		block := f.Body.(StatementList)
+		v.VisitStatementList(block)
+		for _, stmt := range block {
+			stmt.Accept(v)
+		}
+		v.VisitBeforeForStatementUpdate(f)
+		f.Update.Accept(v)
+	} else {
+		f.Body.Accept(v)
+		v.VisitBeforeForStatementUpdate(f)
+		f.Update.Accept(v)
+	}
 }
 
 // ----------------- END OF STATEMENTS
