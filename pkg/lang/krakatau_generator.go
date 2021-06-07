@@ -630,7 +630,7 @@ var opString = map[text.TokenType]string{
 	text.Subtraction:      "isub",
 	text.Multiplication:   "imul",
 	text.Division:         "idiv",
-	text.Modulus:          "imod",
+	text.Modulus:          "irem",
 	text.GreaterThan:      "if_icmpgt",
 	text.GreaterThanEqual: "if_icmpge",
 	text.LessThan:         "if_icmplt",

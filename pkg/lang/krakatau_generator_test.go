@@ -362,7 +362,7 @@ func TestKrakatauGen_AfterBinOp(t *testing.T) {
 			[]string{
 				"bipush 12",
 				"iconst_3",
-				"imod",
+				"irem",
 			},
 			2,
 		},
