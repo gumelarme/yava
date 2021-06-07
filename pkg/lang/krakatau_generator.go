@@ -617,6 +617,8 @@ var opString = map[text.TokenType]string{
 func (c *KrakatauGen) VisitAfterBinOp(bin *text.BinOp) {
 	// use (remove) two operand, and place the result in the stack
 	defer c.decStackSize(1)
+	c.typeStack.Pop()
+	c.typeStack.Pop()
 	strOperator := opString[bin.GetOperator().Type]
 	if isMathOperator(bin.GetOperator().Type) {
 		c.AppendCode(strOperator)

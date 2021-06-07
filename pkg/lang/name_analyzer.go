@@ -53,6 +53,7 @@ type NameAnalyzer struct {
 	curField       TypeMember
 	stack          TypeStack
 	localCount     int
+	fieldBuffer    TypeMember
 }
 
 func NewNameAnalyzer(table map[string]*TypeSymbol) *NameAnalyzer {
@@ -67,6 +68,7 @@ func NewNameAnalyzer(table map[string]*TypeSymbol) *NameAnalyzer {
 		nil,
 		TypeStack{},
 		0,
+		nil,
 	}
 }
 
@@ -352,6 +354,7 @@ func (n *NameAnalyzer) VisitAfterJumpStatement(jump *text.JumpStatement) {
 		n.AddErrorf(msgExpectingReturnTypeOf, retType, val)
 	}
 }
+
 func (n *NameAnalyzer) VisitFieldAccess(field *text.FieldAccess) {
 	if n.curField == nil {
 		sym, _ := n.scope.Lookup(field.Name, true)
@@ -404,8 +407,17 @@ func (n *NameAnalyzer) VisitAfterArrayAccess(arr *text.ArrayAccess) {
 }
 
 func (n *NameAnalyzer) VisitArrayAccessDelegate(text.NamedValue) {}
-func (n *NameAnalyzer) VisitMethodCall(*text.MethodCall)         {}
+func (n *NameAnalyzer) VisitMethodCall(*text.MethodCall) {
+	n.fieldBuffer = n.curField
+	n.curField = nil
+}
+
 func (n *NameAnalyzer) VisitAfterMethodCall(method *text.MethodCall) {
+	if n.fieldBuffer != nil {
+		n.curField = n.fieldBuffer
+		n.fieldBuffer = nil
+	}
+
 	argCount := make([]string, len(method.Args))
 
 	for i := range argCount {
@@ -444,6 +456,8 @@ func (n *NameAnalyzer) VisitAfterMethodCall(method *text.MethodCall) {
 
 	if method.ChildNode() != nil {
 		n.curField = methodSym
+	} else {
+		n.curField = nil
 	}
 }
 

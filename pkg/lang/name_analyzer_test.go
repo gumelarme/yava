@@ -447,7 +447,7 @@ func TestNameAnalyzer_VisitConstant(t *testing.T) {
 	expected := DataType{table["Human"], false}
 	nameAnalyzer := NewNameAnalyzer(table)
 	nameAnalyzer.newScope("func")
-	nameAnalyzer.scope.Insert(&FieldSymbol{expected, "this"}, 1) //FIXME: change to another address
+	nameAnalyzer.scope.Insert(&FieldSymbol{expected, "this"}, 0) //FIXME: change to another address
 
 	this := &text.This{Child: &text.FieldAccess{Name: "Hello", Child: nil}}
 	this.Accept(nameAnalyzer)
