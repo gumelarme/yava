@@ -872,7 +872,7 @@ func (f *ForStatement) Accept(v Visitor) {
 	}
 
 	if f.Update != nil {
-		f.Condition.Accept(v)
+		f.Update.Accept(v)
 	}
 
 	f.Body.Accept(v)

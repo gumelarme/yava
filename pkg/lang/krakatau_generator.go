@@ -134,6 +134,19 @@ func fieldDescriptor(name string, isArray bool) (result string) {
 	return result
 }
 
+type IntStack []int
+
+func (i *IntStack) Pop() int {
+	n := len(*i) - 1
+	val := (*i)[n]
+	*i = (*i)[:n]
+	return val
+}
+
+func (i *IntStack) Push(val int) {
+	*i = append(*i, val)
+}
+
 type KrakatauGen struct {
 	stackMax         int
 	stackSize        int
@@ -150,8 +163,8 @@ type KrakatauGen struct {
 	isAssignment     bool
 	isObjectCreation bool
 	hasField         bool
-	loopOuter        []int
-	loopHead         []int
+	loopOuter        IntStack
+	loopHead         IntStack
 }
 
 func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauGen {
@@ -475,23 +488,23 @@ func (c *KrakatauGen) VisitAfterForStatementCondition(*text.ForStatement) {}
 func (c *KrakatauGen) VisitWhileStatement(*text.WhileStatement) {
 	head := c.getLabel()
 	c.AppendCode(labelCode("", head))
-	c.loopHead = append(c.loopHead, head)
+	c.loopHead.Push(head)
 }
+
 func (c *KrakatauGen) VisitAfterWhileStatementCondition(*text.WhileStatement) {
 	whileBody, outer := c.getLabel(), c.getLabel()
 	c.AppendCode(fmt.Sprintf("ifne L%d", whileBody))
-	c.loopOuter = append(c.loopOuter, outer)
+
+	c.loopOuter.Push(outer)
+
 	c.AppendCode(gotoLabel(outer))
 	c.AppendCode(labelCode("", whileBody))
 }
 
 func (c *KrakatauGen) VisitAfterWhileStatement(*text.WhileStatement) {
 	// popping
-	head := c.loopHead[len(c.loopHead)-1]
-	c.loopHead = c.loopHead[0 : len(c.loopHead)-1]
-
-	outer := c.loopOuter[len(c.loopOuter)-1]
-	c.loopOuter = c.loopOuter[0 : len(c.loopOuter)-1]
+	head := c.loopHead.Pop()
+	outer := c.loopOuter.Pop()
 
 	c.AppendCode(gotoLabel(head))
 	c.AppendCode(labelCode("", outer))
@@ -533,6 +546,19 @@ func (c *KrakatauGen) VisitAfterAssignmentStatement(a *text.AssignmentStatement)
 
 func (c *KrakatauGen) VisitJumpStatement(*text.JumpStatement) {}
 func (c *KrakatauGen) VisitAfterJumpStatement(jump *text.JumpStatement) {
+	// assume its inside a loop
+	if jump.Type != text.ReturnJump {
+		labelSource := c.loopHead
+		if jump.Type == text.BreakJump {
+			labelSource = c.loopOuter
+		}
+
+		lbl := labelSource.Pop()
+		c.AppendCode(gotoLabel(lbl))
+		c.loopHead.Push(lbl) //put it back
+		return
+	}
+
 	defer c.decStackSize(1)
 	if jump.ChildNode() == nil {
 		c.AppendCode("return")

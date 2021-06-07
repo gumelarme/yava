@@ -341,6 +341,10 @@ func (n *NameAnalyzer) VisitAfterAssignmentStatement(*text.AssignmentStatement) 
 
 func (n *NameAnalyzer) VisitJumpStatement(*text.JumpStatement) {}
 func (n *NameAnalyzer) VisitAfterJumpStatement(jump *text.JumpStatement) {
+	if jump.Type != text.ReturnJump {
+		return
+	}
+
 	fmt.Println("Stack", n.stack)
 	val, _ := n.stack.Pop()
 	retType, _ := n.stack.Pop()

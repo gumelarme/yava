@@ -1142,3 +1142,31 @@ func TestKrakatauGen_WhileStatement(t *testing.T) {
 		})
 	}
 }
+
+func TestKrakatauGen_Break_Continue(t *testing.T) {
+	mockKrakatau(func(gen *KrakatauGen) {
+		jumpBreak := text.JumpStatement{
+			Type: text.BreakJump,
+			Exp:  nil,
+		}
+
+		gen.loopOuter.Push(30)
+		jumpBreak.Accept(gen)
+		assertHasSameCodes(t, gen,
+			"goto L30",
+		)
+	})
+
+	mockKrakatau(func(gen *KrakatauGen) {
+		gen.loopHead.Push(10)
+		continueJump := text.JumpStatement{
+			Type: text.ContinueJump,
+			Exp:  nil,
+		}
+		continueJump.Accept(gen)
+		assertHasSameCodes(t, gen,
+			"goto L10",
+		)
+	})
+
+}
