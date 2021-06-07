@@ -238,6 +238,7 @@ func (t *TypeAnalyzer) VisitForStatement(*text.ForStatement)                    
 func (t *TypeAnalyzer) VisitAfterForStatementCondition(*text.ForStatement)      {}
 func (t *TypeAnalyzer) VisitWhileStatement(*text.WhileStatement)                {}
 func (t *TypeAnalyzer) VisitAfterWhileStatementCondition(*text.WhileStatement)  {}
+func (t *TypeAnalyzer) VisitAfterWhileStatement(*text.WhileStatement)           {}
 func (t *TypeAnalyzer) VisitAssignmentStatement(*text.AssignmentStatement)      {}
 func (t *TypeAnalyzer) VisitAfterAssignmentStatement(*text.AssignmentStatement) {}
 func (t *TypeAnalyzer) VisitJumpStatement(*text.JumpStatement)                  {}

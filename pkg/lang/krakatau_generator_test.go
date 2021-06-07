@@ -736,6 +736,7 @@ func mockKrakatau(do func(gen *KrakatauGen)) {
 	// lexer := text.NewLexer(text.NewStringScanner(content))
 	// parser := text.NewParser(&lexer)
 	gen := NewEmptyKrakatauGen()
+	gen.typeTable = NewEmptyKrakatauGen().typeTable
 	do(gen)
 }
 
@@ -1057,6 +1058,86 @@ func TestKrakatauGen_This(t *testing.T) {
 			}
 
 			d.namedValue.Accept(gen)
+			assertHasSameCodes(t, gen, d.expect...)
+		})
+	}
+}
+
+func TestKrakatauGen_WhileStatement(t *testing.T) {
+	var add, lt, assign text.Token
+	add.Type = text.Addition
+	lt.Type = text.LessThan
+	assign.Type = text.Assignment
+
+	condition := text.NewBinOp(lt, &text.FieldAccess{Name: "a", Child: nil}, text.Num(10))
+	increment := text.NewBinOp(add, &text.FieldAccess{Name: "a", Child: nil}, text.Num(1))
+
+	data := []struct {
+		local  Local
+		while  text.WhileStatement
+		expect []string
+	}{
+		{
+			Local{&FieldSymbol{mockInt, "a"}, 1},
+			text.WhileStatement{
+				Condition: text.Boolean(true),
+				Body:      text.StatementList{},
+			},
+			[]string{
+				"L0:\t",
+				"iconst_1",
+				"ifne L1", // true
+				"goto L2",
+				"L1:\t",
+				"goto L0",
+				"L2:\t",
+			},
+		},
+		{
+			Local{&FieldSymbol{mockInt, "a"}, 1},
+			text.WhileStatement{
+				Condition: &condition,
+				Body: &text.AssignmentStatement{
+					Operator: assign,
+					Left: &text.FieldAccess{
+						Name:  "a",
+						Child: nil,
+					},
+					Right: &increment,
+				},
+			},
+			[]string{
+				"L0:\t",
+				"iload_1",
+				"bipush 10",
+				"if_icmplt L1",
+				"iconst_0",
+				"goto L2",
+				"L1:\ticonst_1",
+				"L2:\t",
+				"ifne L3", // true
+				"goto L4",
+				"L3:\t",
+				"iload_1",
+				"iconst_1",
+				"iadd",
+				"istore_1",
+				"goto L0",
+				"L4:\t",
+			},
+		},
+	}
+
+	for _, d := range data {
+		mockKrakatau(func(gen *KrakatauGen) {
+			table := NewSymbolTable("mock", 0, nil)
+			table.Insert(d.local.Member, d.local.address)
+			gen.scopeIndex = 0
+			gen.symbolTable = []*SymbolTable{
+				&table,
+			}
+
+			d.while.Accept(gen)
 			assertHasSameCodes(t, gen, d.expect...)
 		})
 	}

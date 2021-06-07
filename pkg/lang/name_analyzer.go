@@ -320,7 +320,8 @@ func (n *NameAnalyzer) VisitAfterForStatementCondition(forStmt *text.ForStatemen
 	n.expectLastStackTypeOf("int", false)
 }
 
-func (n *NameAnalyzer) VisitWhileStatement(*text.WhileStatement) {}
+func (n *NameAnalyzer) VisitWhileStatement(*text.WhileStatement)      {}
+func (n *NameAnalyzer) VisitAfterWhileStatement(*text.WhileStatement) {}
 func (n *NameAnalyzer) VisitAfterWhileStatementCondition(*text.WhileStatement) {
 	n.expectLastStackTypeOf("boolean", false)
 }

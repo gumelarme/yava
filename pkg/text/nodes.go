@@ -34,6 +34,7 @@ type Visitor interface {
 	VisitAfterForStatementCondition(*ForStatement)
 	VisitWhileStatement(*WhileStatement)
 	VisitAfterWhileStatementCondition(*WhileStatement)
+	VisitAfterWhileStatement(*WhileStatement)
 	VisitAssignmentStatement(*AssignmentStatement)
 	VisitAfterAssignmentStatement(*AssignmentStatement)
 	VisitJumpStatement(*JumpStatement)
@@ -759,6 +760,7 @@ func (w *WhileStatement) Accept(v Visitor) {
 		v.VisitAfterWhileStatementCondition(w)
 	}
 	w.Body.Accept(v)
+	v.VisitAfterWhileStatement(w)
 }
 
 type MethodCallStatement struct {

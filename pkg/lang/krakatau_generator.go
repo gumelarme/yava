@@ -150,6 +150,8 @@ type KrakatauGen struct {
 	isAssignment     bool
 	isObjectCreation bool
 	hasField         bool
+	loopOuter        []int
+	loopHead         []int
 }
 
 func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauGen {
@@ -169,6 +171,8 @@ func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauG
 		false,
 		false,
 		false,
+		make([]int, 0),
+		make([]int, 0),
 	}
 }
 
@@ -467,9 +471,32 @@ func (c *KrakatauGen) VisitForStatement(forStmt *text.ForStatement) {
 		c.isScopeCreated = true
 	}
 }
-func (c *KrakatauGen) VisitAfterForStatementCondition(*text.ForStatement)     {}
-func (c *KrakatauGen) VisitWhileStatement(*text.WhileStatement)               {}
-func (c *KrakatauGen) VisitAfterWhileStatementCondition(*text.WhileStatement) {}
+func (c *KrakatauGen) VisitAfterForStatementCondition(*text.ForStatement) {}
+func (c *KrakatauGen) VisitWhileStatement(*text.WhileStatement) {
+	head := c.getLabel()
+	c.AppendCode(labelCode("", head))
+	c.loopHead = append(c.loopHead, head)
+}
+func (c *KrakatauGen) VisitAfterWhileStatementCondition(*text.WhileStatement) {
+	whileBody, outer := c.getLabel(), c.getLabel()
+	c.AppendCode(fmt.Sprintf("ifne L%d", whileBody))
+	c.loopOuter = append(c.loopOuter, outer)
+	c.AppendCode(gotoLabel(outer))
+	c.AppendCode(labelCode("", whileBody))
+}
+
+func (c *KrakatauGen) VisitAfterWhileStatement(*text.WhileStatement) {
+	// popping
+	head := c.loopHead[len(c.loopHead)-1]
+	c.loopHead = c.loopHead[0 : len(c.loopHead)-1]
+
+	outer := c.loopOuter[len(c.loopOuter)-1]
+	c.loopOuter = c.loopOuter[0 : len(c.loopOuter)-1]
+
+	c.AppendCode(gotoLabel(head))
+	c.AppendCode(labelCode("", outer))
+}
+
 func (c *KrakatauGen) VisitAssignmentStatement(*text.AssignmentStatement) {
 	c.isAssignment = true
 }
@@ -605,9 +632,9 @@ var opString = map[text.TokenType]string{
 	text.Division:         "idiv",
 	text.Modulus:          "imod",
 	text.GreaterThan:      "if_icmpgt",
-	text.GreaterThanEqual: "if_icmpgte",
+	text.GreaterThanEqual: "if_icmpge",
 	text.LessThan:         "if_icmplt",
-	text.LessThanEqual:    "if_icmplte",
+	text.LessThanEqual:    "if_icmple",
 	text.Equal:            "if_icmpeq",
 	text.NotEqual:         "if_icmpne",
 	// text.And:              "if_icmpgt",
