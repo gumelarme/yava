@@ -414,7 +414,7 @@ func (c *KrakatauGen) VisitAfterMethodDeclaration(*text.MethodDeclaration) {
 	c.Append(c.getStackAndLocalCount())
 	if !c.isCodeEndsWithReturn() {
 		// FIXME: determine the return type
-		c.Append("return")
+		c.AppendCode("return")
 	}
 	c.combineCodes()
 	c.Append(".end code")
@@ -568,25 +568,29 @@ func (c *KrakatauGen) VisitAfterAssignmentStatement(a *text.AssignmentStatement)
 		c.AppendCode(loadOrStore(local, Store))
 		return
 	}
+	//pop the right one
+	c.typeStack.Pop()
+	// the parentField
+	// the paretnField type name
+	var parentField text.NamedValue
+	parentField = a.Left
+	leftType, _ := c.typeStack.Pop()
+	parentFieldTypeName := leftType.dataType.name
 
-	lastField := a.Left
-	field := lastField.(*text.FieldAccess)
-	local := c.Lookup(field.Name)
 	for {
-		if lastField.ChildNode() != nil && lastField.ChildNode().ChildNode() == nil {
+		child := parentField.GetChild()
+		if child != nil && child.GetChild() == nil {
 			break
 		}
-		lastField = lastField.GetChild()
-		field := lastField.(*text.FieldAccess)
-		local = c.Lookup(field.Name)
+		parentField = child
 	}
 
-	field = lastField.GetChild().(*text.FieldAccess)
-	typeOfField := c.typeTable.Lookup(local.Member.Type().dataType.name)
-	prop := typeOfField.LookupProperty(field.Name)
+	lastField := parentField.GetChild().(*text.FieldAccess)
+	typeOfField := c.typeTable.Lookup(parentFieldTypeName)
+	prop := typeOfField.LookupProperty(lastField.Name)
 	c.AppendCode(fmt.Sprintf("putfield Field %s %s %s",
-		local.Member.Type().dataType.name,
-		field.Name,
+		parentFieldTypeName,
+		lastField.Name,
 		fieldDescriptor(prop.dataType.name, prop.isArray),
 	))
 }

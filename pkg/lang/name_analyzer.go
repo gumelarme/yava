@@ -353,16 +353,17 @@ func (n *NameAnalyzer) VisitAfterJumpStatement(jump *text.JumpStatement) {
 		return
 	}
 
-	fmt.Println("Stack", n.stack)
-	val, _ := n.stack.Pop()
-	retType, _ := n.stack.Pop()
-	n.stack.Push(retType)
-
-	if retType.dataType.name == "void" && jump.Exp != nil {
-		n.AddErrorf(msgVoidDontHaveType, val)
+	// return type always at the second index
+	retType := n.stack[1]
+	if retType.dataType.name == "void" {
+		if jump.Exp != nil {
+			val, _ := n.stack.Pop()
+			n.AddErrorf(msgVoidDontHaveType, val)
+		}
 		return
 	}
 
+	val, _ := n.stack.Pop()
 	if retType != val {
 		n.AddErrorf(msgExpectingReturnTypeOf, retType, val)
 	}
