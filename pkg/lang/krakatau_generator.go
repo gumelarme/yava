@@ -183,7 +183,7 @@ func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauG
 		typeTable,
 		symbolTables,
 		false,
-		0,
+		-1,
 		TypeStack{},
 		false,
 		false,

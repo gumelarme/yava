@@ -223,6 +223,7 @@ func (n *NameAnalyzer) VisitMethodSignature(sign *text.MethodSignature) {
 
 func (n *NameAnalyzer) VisitMethodDeclaration(*text.MethodDeclaration) {}
 func (n *NameAnalyzer) VisitMainMethodDeclaration(*text.MainMethodDeclaration) {
+	n.localCount = 0
 	returnType := DataType{
 		NewType("void", Primitive),
 		false,
