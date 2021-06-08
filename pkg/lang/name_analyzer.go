@@ -324,7 +324,7 @@ func (n *NameAnalyzer) VisitForStatement(forStmt *text.ForStatement) {
 
 func (n *NameAnalyzer) VisitAfterForStatementInit(*text.ForStatement) {}
 func (n *NameAnalyzer) VisitAfterForStatementCondition(forStmt *text.ForStatement) {
-	n.expectLastStackTypeOf("int", false)
+	n.expectLastStackTypeOf("boolean", false)
 }
 func (n *NameAnalyzer) VisitBeforeForStatementUpdate(*text.ForStatement) {}
 func (n *NameAnalyzer) VisitAfterForStatement(*text.ForStatement)        {}

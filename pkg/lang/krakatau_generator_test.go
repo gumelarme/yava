@@ -219,7 +219,7 @@ func TestKrakatauGen_AfterClass(t *testing.T) {
 		".method <init> : ()V",
 		".code stack 1 locals 1",
 		"aload_0",
-		InvokeJavaObject,
+		invokeDefaultConstructor("java/lang/Object"),
 		"return",
 		".end code",
 		".end method",
@@ -282,56 +282,84 @@ func TestKrakatauGen_PropertyDeclaration(t *testing.T) {
 }
 
 func TestKrakataugGen_makeDefaultConstructor(t *testing.T) {
-	className := "Mock"
-	mockKrakatau(func(gen *KrakatauGen) {
-		typeTable := NewTypeAnalyzer().table
-		gen.typeTable = typeTable
-		gen.makeDefaultConstructor(className,
-			&text.PropertyDeclaration{
-				AccessModifier: text.Public,
-				VariableDeclaration: text.VariableDeclaration{
-					Type:  text.NamedType{Name: "int", IsArray: false},
-					Name:  "intProp",
-					Value: nil,
-				},
+	var mockClass text.Class
+	mockClass.Name = "Mock"
+	mockClass.Properties = []*text.PropertyDeclaration{
+		{
+			AccessModifier: text.Public,
+			VariableDeclaration: text.VariableDeclaration{
+				Type:  text.NamedType{Name: "int", IsArray: false},
+				Name:  "intProp",
+				Value: nil,
 			},
-			&text.PropertyDeclaration{
-				AccessModifier: text.Public,
-				VariableDeclaration: text.VariableDeclaration{
-					Type:  text.NamedType{Name: "String", IsArray: false},
-					Name:  "stringProp",
-					Value: nil,
-				},
+		},
+		{
+			AccessModifier: text.Public,
+			VariableDeclaration: text.VariableDeclaration{
+				Type:  text.NamedType{Name: "String", IsArray: false},
+				Name:  "stringProp",
+				Value: nil,
 			},
-			&text.PropertyDeclaration{
-				AccessModifier: text.Public,
-				VariableDeclaration: text.VariableDeclaration{
-					Type:  text.NamedType{Name: "int", IsArray: false},
-					Name:  "age",
-					Value: text.Num(4000),
-				},
+		},
+		{
+			AccessModifier: text.Public,
+			VariableDeclaration: text.VariableDeclaration{
+				Type:  text.NamedType{Name: "int", IsArray: false},
+				Name:  "age",
+				Value: text.Num(4000),
 			},
-		)
+		},
+	}
 
-		assertHasSameCodes(t, gen,
-			".method <init> : ()V",
-			".code stack 2 locals 1",
-			"aload_0",
-			InvokeJavaObject,
-			"aload_0",
-			"iconst_0",
-			"putfield Field Mock intProp I",
-			"aload_0",
-			"aconst_null",
-			"putfield Field Mock stringProp Ljava/lang/String;",
-			"aload_0",
-			"ldc 4000",
-			"putfield Field Mock age I",
-			"return",
-			".end code",
-			".end method",
-		)
-	})
+	mockExtend := mockClass
+	mockExtend.Extend = "Person"
+	mockExtend.Properties = []*text.PropertyDeclaration{}
+
+	data := []struct {
+		class  *text.Class
+		expect []string
+	}{
+		{
+			&mockClass,
+			[]string{
+				".method <init> : ()V",
+				".code stack 2 locals 1",
+				"aload_0",
+				invokeDefaultConstructor("java/lang/Object"),
+				"aload_0",
+				"iconst_0",
+				"putfield Field Mock intProp I",
+				"aload_0",
+				"aconst_null",
+				"putfield Field Mock stringProp Ljava/lang/String;",
+				"aload_0",
+				"ldc 4000",
+				"putfield Field Mock age I",
+				"return",
+				".end code",
+				".end method",
+			},
+		},
+		{
+			&mockExtend,
+			[]string{
+				".method <init> : ()V",
+				".code stack 1 locals 1",
+				"aload_0",
+				invokeDefaultConstructor("Person"),
+				"return",
+				".end code",
+				".end method",
+			},
+		},
+	}
+
+	for _, d := range data {
+		mockKrakatau(func(gen *KrakatauGen) {
+			gen.makeDefaultConstructor(*d.class)
+			assertHasSameCodes(t, gen, d.expect...)
+		})
+	}
 }
 
 func TestKrakatauGen_AfterBinOp(t *testing.T) {
