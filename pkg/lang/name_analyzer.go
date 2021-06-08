@@ -44,17 +44,18 @@ func (t *TypeStack) Overwrite(d DataType) {
 
 type NameAnalyzer struct {
 	ErrorCollector
-	typeTable      TypeTable
-	scope          SymbolTable
-	error          []string
-	isScopeCreated bool
-	counter        int
-	Tables         []*SymbolTable
-	curField       TypeMember
-	stack          TypeStack
-	localCount     int
-	fieldBuffer    TypeMember
-	isInterface    bool
+	typeTable        TypeTable
+	scope            SymbolTable
+	error            []string
+	isScopeCreated   bool
+	counter          int
+	Tables           []*SymbolTable
+	curField         TypeMember
+	stack            TypeStack
+	localCount       int
+	fieldBuffer      TypeMember
+	isInterface      bool
+	isObjectCreation bool
 }
 
 func NewNameAnalyzer(table map[string]*TypeSymbol) *NameAnalyzer {
@@ -70,6 +71,7 @@ func NewNameAnalyzer(table map[string]*TypeSymbol) *NameAnalyzer {
 		TypeStack{},
 		0,
 		nil,
+		false,
 		false,
 	}
 }
@@ -476,6 +478,11 @@ func (n *NameAnalyzer) VisitMethodCall(*text.MethodCall) {
 }
 
 func (n *NameAnalyzer) VisitAfterMethodCall(method *text.MethodCall) {
+	if n.isObjectCreation {
+		n.isObjectCreation = false
+		return
+	}
+
 	if n.fieldBuffer != nil {
 		n.curField = n.fieldBuffer
 		n.fieldBuffer = nil
@@ -542,8 +549,22 @@ func (n *NameAnalyzer) VisitAfterArrayCreation(arr *text.ArrayCreation) {
 	})
 }
 
-func (n *NameAnalyzer) VisitObjectCreation(*text.ObjectCreation) {}
-func (n *NameAnalyzer) VisitBinOp(bin *text.BinOp)               {}
+func (n *NameAnalyzer) VisitObjectCreation(*text.ObjectCreation) {
+	n.isObjectCreation = true
+}
+
+func (n *NameAnalyzer) VisitAfterObjectCreation(o *text.ObjectCreation) {
+	//TODO: implement parameterize object creation
+	objectSymbol := n.typeTable[o.Name]
+	if objectSymbol == nil {
+		n.AddErrorf(msgTypeNotExist, o.Name)
+		return
+	}
+
+	n.stack.Push(DataType{objectSymbol, false})
+}
+
+func (n *NameAnalyzer) VisitBinOp(bin *text.BinOp) {}
 
 func (n *NameAnalyzer) mustBeTypeof(left, right DataType, types ...string) bool {
 	leftName, rightName := left.dataType.name, right.dataType.name

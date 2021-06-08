@@ -256,6 +256,7 @@ func (t *TypeAnalyzer) VisitAfterMethodCall(*text.MethodCall)                   
 func (t *TypeAnalyzer) VisitArrayCreation(*text.ArrayCreation)                  {}
 func (t *TypeAnalyzer) VisitAfterArrayCreation(*text.ArrayCreation)             {}
 func (t *TypeAnalyzer) VisitObjectCreation(*text.ObjectCreation)                {}
+func (t *TypeAnalyzer) VisitAfterObjectCreation(*text.ObjectCreation)           {}
 func (t *TypeAnalyzer) VisitBinOp(*text.BinOp)                                  {}
 func (t *TypeAnalyzer) VisitAfterBinOp(*text.BinOp)                             {}
 func (t *TypeAnalyzer) VisitConstant(text.Expression)                           {}

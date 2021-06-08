@@ -52,6 +52,7 @@ type Visitor interface {
 	VisitArrayCreation(*ArrayCreation)
 	VisitAfterArrayCreation(*ArrayCreation)
 	VisitObjectCreation(*ObjectCreation)
+	VisitAfterObjectCreation(*ObjectCreation)
 	VisitBinOp(*BinOp)
 	VisitAfterBinOp(*BinOp)
 	VisitConstant(Expression)
@@ -467,6 +468,7 @@ type ObjectCreation struct {
 func (o *ObjectCreation) Accept(visitor Visitor) {
 	visitor.VisitObjectCreation(o)
 	o.MethodCall.Accept(visitor)
+	visitor.VisitAfterObjectCreation(o)
 }
 
 func (o *ObjectCreation) NodeContent() (string, string) {

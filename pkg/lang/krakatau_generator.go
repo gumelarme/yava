@@ -721,10 +721,12 @@ func (c *KrakatauGen) VisitArrayCreation(*text.ArrayCreation)      {}
 func (c *KrakatauGen) VisitAfterArrayCreation(*text.ArrayCreation) {}
 func (c *KrakatauGen) VisitObjectCreation(obj *text.ObjectCreation) {
 	c.isObjectCreation = true
+}
+
+func (c *KrakatauGen) VisitAfterObjectCreation(obj *text.ObjectCreation) {
 	c.AppendCode(fmt.Sprintf("new %s", obj.Name))
 	c.AppendCode("dup")
 	c.incStackSize(2)
-
 	c.AppendCode(fmt.Sprintf("invokespecial Method %s <init> ()V", obj.Name))
 	c.decStackSize(1)
 }

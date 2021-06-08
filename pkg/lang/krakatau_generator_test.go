@@ -990,7 +990,7 @@ func TestKrakatau_ObjecCreation(t *testing.T) {
 
 	for _, d := range data {
 		mockKrakatau(func(gen *KrakatauGen) {
-			gen.VisitObjectCreation(&d.obj)
+			d.obj.Accept(gen)
 			assertHasSameCodes(t, gen, d.expect...)
 		})
 	}
