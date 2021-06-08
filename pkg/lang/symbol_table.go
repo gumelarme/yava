@@ -75,6 +75,32 @@ func NewType(name string, category TypeCategory) *TypeSymbol {
 	}
 }
 
+func (t *TypeSymbol) isDescendantOf(val *TypeSymbol) bool {
+	for parent := t.extends; parent != nil; parent = parent.extends {
+		if val == parent {
+			return true
+		}
+	}
+	return false
+}
+
+func (t *TypeSymbol) isImplementing(val *TypeSymbol) bool {
+	parent := t
+	for {
+		if parent.implements == val {
+			return true
+		}
+
+		if parent.extends != nil {
+			parent = parent.extends
+			continue
+		}
+
+		break
+	}
+	return false
+}
+
 func (t TypeSymbol) Name() string {
 	return t.name
 }

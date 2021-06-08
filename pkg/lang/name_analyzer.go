@@ -293,12 +293,32 @@ func (n *NameAnalyzer) VisitAfterVariableDeclaration(varDecl *text.VariableDecla
 		return
 	}
 
-	if varType != expressionType {
+	if !isTypeValid(varType, expressionType) {
 		n.AddErrorf(msgExpectingTypeof, varType, expressionType)
 		canDeclare = false
 		return
 	}
 
+}
+
+func isTypeValid(varType, expressionType DataType) bool {
+	if varType.isArray != expressionType.isArray {
+		return false
+	}
+
+	if varType == expressionType {
+		return true
+	}
+
+	if expressionType.dataType.isDescendantOf(varType.dataType) {
+		return true
+	}
+
+	if expressionType.dataType.isImplementing(varType.dataType) {
+		return true
+	}
+
+	return false
 }
 
 func (n *NameAnalyzer) VisitStatementList(text.StatementList) {
