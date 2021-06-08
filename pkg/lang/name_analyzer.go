@@ -54,6 +54,7 @@ type NameAnalyzer struct {
 	stack          TypeStack
 	localCount     int
 	fieldBuffer    TypeMember
+	isInterface    bool
 }
 
 func NewNameAnalyzer(table map[string]*TypeSymbol) *NameAnalyzer {
@@ -69,7 +70,15 @@ func NewNameAnalyzer(table map[string]*TypeSymbol) *NameAnalyzer {
 		TypeStack{},
 		0,
 		nil,
+		false,
 	}
+}
+
+func (n *NameAnalyzer) popScope() {
+	// every popped is added to the tables again, so the access could be linear
+	n.Tables = append(n.Tables, n.scope.parent)
+	// pop scope
+	n.scope = *n.scope.parent
 }
 
 func (n *NameAnalyzer) newScope(name string) {
@@ -119,8 +128,23 @@ func (n *NameAnalyzer) Insert(member TypeMember) {
 	n.localCount += 1
 }
 
-func (n *NameAnalyzer) VisitProgram(text.Program)      {}
-func (n *NameAnalyzer) VisitInterface(*text.Interface) {}
+func (n *NameAnalyzer) VisitProgram(text.Program) {}
+func (n *NameAnalyzer) VisitInterface(i *text.Interface) {
+	n.newScope(fmt.Sprintf("interface-%s", i.Name))
+	n.isInterface = true
+	interfaceType := n.typeTable[i.Name]
+	n.stack.Push(DataType{
+		interfaceType,
+		false,
+	})
+}
+
+func (n *NameAnalyzer) VisitAfterInterface(*text.Interface) {
+	n.isInterface = false
+	n.popScope()
+	n.stack.Pop()
+}
+
 func (n *NameAnalyzer) VisitClass(class *text.Class) {
 	name := fmt.Sprintf("class-%s", class.Name)
 	n.newScope(name)
@@ -142,11 +166,19 @@ func (n *NameAnalyzer) VisitClass(class *text.Class) {
 
 // REVIEW: Shold we pop scope here
 func (n *NameAnalyzer) VisitAfterClass(*text.Class) {
+	n.popScope()
 	n.stack.Pop()
 }
 func (n *NameAnalyzer) VisitPropertyDeclaration(*text.PropertyDeclaration) {}
 
 func (n *NameAnalyzer) VisitMethodSignature(sign *text.MethodSignature) {
+	defer func() {
+		if n.isInterface {
+			n.popScope()
+			n.stack.Pop()
+		}
+	}()
+
 	n.localCount = 0 // reset
 	n.isScopeCreated = true
 	n.newScope(fmt.Sprintf("method-%s", sign.Signature()))
@@ -277,11 +309,7 @@ func (n *NameAnalyzer) VisitStatementList(text.StatementList) {
 }
 
 func (n *NameAnalyzer) VisitAfterStatementList() {
-
-	// every popped is added to the tables again, so the access could be linear
-	n.Tables = append(n.Tables, n.scope.parent)
-	// pop scope
-	n.scope = *n.scope.parent
+	n.popScope()
 }
 func (n *NameAnalyzer) VisitSwitchStatement(*text.SwitchStatement) {
 	n.stack.Push(n.curField.Type())

@@ -156,6 +156,7 @@ func (t *TypeAnalyzer) VisitInterface(inf *text.Interface) {
 	t.current = NewType(inf.Name, Interface)
 	t.table[inf.Name] = t.current
 }
+func (t *TypeAnalyzer) VisitAfterInterface(inf *text.Interface) {}
 
 func (t *TypeAnalyzer) VisitPropertyDeclaration(prop *text.PropertyDeclaration) {
 	if !t.typeExist(prop.Type.Name) {

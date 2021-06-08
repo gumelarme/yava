@@ -86,11 +86,15 @@ func withTypeAnal(node text.INode, doThings func(nameAnal *NameAnalyzer)) {
 
 func TestNameAnalyzer_Class(t *testing.T) {
 	withTypeAnal(classHuman, func(nameAnal *NameAnalyzer) {
-		expectName := "class-Human_1"
-		if nameAnal.scope.level != 1 || nameAnal.scope.name != expectName {
-			t.Errorf("VisitClass should result in new scope, but got: %s:%d",
+		expectName := "<program>"
+		if nameAnal.scope.level != 0 ||
+			nameAnal.scope.name != expectName ||
+			nameAnal.counter != 1 {
+			t.Errorf("VisitClass should result in new scope, but got: %s:%d, counted in %d instead of %d",
 				nameAnal.scope.name,
 				nameAnal.scope.level,
+				nameAnal.counter,
+				1,
 			)
 		}
 	})

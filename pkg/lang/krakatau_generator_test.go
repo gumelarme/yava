@@ -227,6 +227,32 @@ func TestKrakatauGen_AfterClass(t *testing.T) {
 	)
 }
 
+func TestKrakatauGen_Interface(t *testing.T) {
+	var inter text.Interface
+	inter.Name = "Mock"
+
+	mockKrakatau(func(gen *KrakatauGen) {
+		gen.VisitInterface(&inter)
+		assertHasSameCodes(t, gen,
+			".class interface abstract Mock",
+			".super java/lang/Object",
+		)
+	})
+
+	inter.AddMethod(&methodGetAge.MethodSignature)
+	mockKrakatau(func(gen *KrakatauGen) {
+		inter.Accept(gen)
+		assertHasSameCodes(t, gen,
+			".class interface abstract Mock",
+			".super java/lang/Object",
+			".method public abstract getAge : ()I",
+			".end method",
+			".end class",
+		)
+	})
+
+}
+
 func TestKrakatauGen_PropertyDeclaration(t *testing.T) {
 	data := []struct {
 		prop   text.PropertyDeclaration

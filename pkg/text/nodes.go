@@ -13,6 +13,7 @@ type Visitor interface {
 	VisitClass(*Class)
 	VisitAfterClass(*Class)
 	VisitInterface(*Interface)
+	VisitAfterInterface(*Interface)
 	VisitPropertyDeclaration(*PropertyDeclaration)
 	VisitMethodSignature(*MethodSignature)
 	VisitMainMethodDeclaration(*MainMethodDeclaration)
@@ -1229,6 +1230,7 @@ func (i *Interface) Accept(v Visitor) {
 	for _, method := range i.Methods {
 		method.Accept(v)
 	}
+	v.VisitAfterInterface(i)
 }
 
 type Class struct {

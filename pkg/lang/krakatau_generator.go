@@ -168,6 +168,7 @@ type KrakatauGen struct {
 	hasField         bool
 	loopOuter        IntStack
 	loopHead         IntStack
+	isInterface      bool
 }
 
 func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauGen {
@@ -182,13 +183,14 @@ func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauG
 		typeTable,
 		symbolTables,
 		false,
-		-1,
+		0,
 		TypeStack{},
 		false,
 		false,
 		false,
 		make([]int, 0),
 		make([]int, 0),
+		false,
 	}
 }
 
@@ -322,9 +324,21 @@ func (c *KrakatauGen) VisitClass(class *text.Class) {
 func (c *KrakatauGen) VisitAfterClass(class *text.Class) {
 	c.makeDefaultConstructor(*class)
 	c.Append(".end class")
+	c.incScopeIndex()
 }
 
-func (c *KrakatauGen) VisitInterface(*text.Interface) {}
+func (c *KrakatauGen) VisitInterface(i *text.Interface) {
+	c.isInterface = true
+	c.Append(fmt.Sprintf(".class interface abstract %s", i.Name))
+	c.Append(".super java/lang/Object")
+	c.incScopeIndex()
+}
+func (c *KrakatauGen) VisitAfterInterface(*text.Interface) {
+	c.Append(".end class")
+	c.isInterface = false
+	c.incScopeIndex()
+}
+
 func (c *KrakatauGen) VisitPropertyDeclaration(prop *text.PropertyDeclaration) {
 	c.Append(fmt.Sprintf(".field %s %s %s",
 		prop.AccessModifier,
@@ -394,14 +408,25 @@ func (c *KrakatauGen) VisitMethodSignature(signature *text.MethodSignature) {
 
 	returnType := fieldDescriptor(signature.ReturnType.Name, signature.ReturnType.IsArray)
 
-	code := fmt.Sprintf(".method %s %s : (%s)%s",
+	var abstractModifier string
+	if c.isInterface {
+		abstractModifier = " abstract"
+	}
+
+	code := fmt.Sprintf(".method %s%s %s : (%s)%s",
 		signature.AccessModifier,
+		abstractModifier,
 		signature.Name,
 		strings.Join(params, ""),
 		returnType,
 	)
 
 	c.Append(code)
+
+	if c.isInterface {
+		c.Append(".end method")
+		c.incScopeIndex()
+	}
 }
 
 func (c *KrakatauGen) VisitMethodDeclaration(*text.MethodDeclaration) {}
@@ -439,10 +464,13 @@ func (c *KrakatauGen) VisitAfterVariableDeclaration(varDecl *text.VariableDeclar
 }
 
 func (c *KrakatauGen) VisitStatementList(text.StatementList) {
-	c.incScopeIndex()
+	if !c.isScopeCreated {
+		c.incScopeIndex()
+	} else {
+		c.isScopeCreated = false
+	}
 }
 func (c *KrakatauGen) VisitAfterStatementList() {
-	c.isScopeCreated = false
 	c.incScopeIndex()
 }
 
@@ -749,6 +777,7 @@ func (c *KrakatauGen) VisitConstant(e text.Expression) {
 		c.AppendCode(codeConstant(e))
 		return
 	}
+	fmt.Println(c.symbolTable[c.scopeIndex].name, c.scopeIndex)
 
 	local := c.Lookup("this")
 	c.hasField = true
