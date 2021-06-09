@@ -169,6 +169,7 @@ type KrakatauGen struct {
 	loopOuter        IntStack
 	loopHead         IntStack
 	isInterface      bool
+	currentClass     *text.Class
 }
 
 func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauGen {
@@ -191,6 +192,7 @@ func NewKrakatauGen(typeTable TypeTable, symbolTables []*SymbolTable) *KrakatauG
 		make([]int, 0),
 		make([]int, 0),
 		false,
+		nil,
 	}
 }
 
@@ -303,6 +305,7 @@ func (c *KrakatauGen) VisitProgram(program text.Program) {
 }
 
 func (c *KrakatauGen) VisitClass(class *text.Class) {
+	c.currentClass = class
 	c.incScopeIndex()
 	declareClass := fmt.Sprintf(".class %s", class.Name)
 
@@ -322,7 +325,10 @@ func (c *KrakatauGen) VisitClass(class *text.Class) {
 }
 
 func (c *KrakatauGen) VisitAfterClass(class *text.Class) {
-	c.makeDefaultConstructor(*class)
+	// FIXME : move to the begining of the class
+	if len(class.Constructor) == 0 {
+		c.makeDefaultConstructor(*class)
+	}
 	c.Append(".end class")
 	c.incScopeIndex()
 }
@@ -347,22 +353,39 @@ func (c *KrakatauGen) VisitPropertyDeclaration(prop *text.PropertyDeclaration) {
 	))
 }
 
+func (c *KrakatauGen) makeConstructor(class text.Class, constructor text.ConstructorDeclaration) {
+	signature := make([]string, len(constructor.ParameterList))
+	for i, p := range constructor.ParameterList {
+		signature[i] = fieldDescriptor(p.Type.Name, p.Type.IsArray)
+	}
+
+	c.localCount = len(constructor.ParameterList) + 1
+	header := fmt.Sprintf(".method <init> : (%s)V", strings.Join(signature, ""))
+	c.Append(header)
+	c.initializeConstructor(class.Extend)
+
+	for _, p := range class.Properties {
+		c.putProperties(class.Name, *p)
+	}
+
+}
+
+func (c *KrakatauGen) initializeConstructor(extend string) {
+	c.AppendCode("aload_0")
+	object := "java/lang/Object"
+	if len(extend) > 0 {
+		object = extend
+	}
+	c.AppendCode(invokeDefaultConstructor(object))
+	c.incStackSize(1)
+	c.decStackSize(1)
+}
+
 func (c *KrakatauGen) makeDefaultConstructor(class text.Class) {
 	c.localCount = 1
 	// FIXME: Do something about the parameter
-	header := fmt.Sprintf(".method <init> : (%s)V", "")
-	c.Append(header)
-	c.AppendCode("aload_0")
-
-	object := "java/lang/Object"
-	if len(class.Extend) > 0 {
-		object = class.Extend
-	}
-	c.AppendCode(invokeDefaultConstructor(object))
-
-	c.incStackSize(1)
-	c.decStackSize(1)
-
+	c.Append(".method <init> : ()V")
+	c.initializeConstructor(class.Extend)
 	for _, p := range class.Properties {
 		c.putProperties(class.Name, *p)
 	}
@@ -430,6 +453,20 @@ func (c *KrakatauGen) VisitMethodSignature(signature *text.MethodSignature) {
 }
 
 func (c *KrakatauGen) VisitMethodDeclaration(*text.MethodDeclaration) {}
+func (c *KrakatauGen) VisitConstructor(con *text.ConstructorDeclaration) {
+	c.incScopeIndex()
+	c.isScopeCreated = true
+	c.makeConstructor(*c.currentClass, *con)
+}
+func (c *KrakatauGen) VisitAfterConstructor(*text.ConstructorDeclaration) {
+	c.AppendCode("return")
+	//count stack
+	c.Append(c.getStackAndLocalCount())
+	c.combineCodes()
+	c.Append(".end code")
+	c.Append(".end method")
+}
+
 func (c *KrakatauGen) VisitMainMethodDeclaration(*text.MainMethodDeclaration) {
 	c.localCount = 1
 	c.Append(".method public static main : ([Ljava/lang/String;)V")
@@ -688,21 +725,29 @@ func (c *KrakatauGen) VisitMethodCall(method *text.MethodCall) {
 	c.hasField = method.Child != nil
 }
 
+func (c *KrakatauGen) createSignature(args []text.Expression) (string, string) {
+	argLength := len(args)
+	methodArgs := make([]string, argLength)
+	javaMethodArgs := make([]string, argLength)
+
+	//reverse
+	for i := 0; i < argLength; i++ {
+		dt, _ := c.typeStack.Pop()
+		javaMethodArgs[argLength-1-i] = fieldDescriptor(dt.dataType.name, dt.isArray)
+		methodArgs[argLength-1-i] = dt.String()
+	}
+	m, j := strings.Join(methodArgs, ", "), strings.Join(javaMethodArgs, "")
+	return m, j
+}
+
 func (c *KrakatauGen) VisitAfterMethodCall(method *text.MethodCall) {
 	if c.isObjectCreation {
 		c.isObjectCreation = false
 		return
 	}
 
-	methodArgs := make([]string, len(method.Args))
-	javaMethodArgs := make([]string, len(method.Args))
-	for i := 0; i < len(method.Args); i++ {
-		dt, _ := c.typeStack.Pop()
-		javaMethodArgs[i] = fieldDescriptor(dt.dataType.name, dt.isArray)
-		methodArgs[i] = dt.String()
-	}
-	methodSignature := fmt.Sprintf("%s(%s)", method.Name, strings.Join(methodArgs, ", "))
-	javaMethodSignature := strings.Join(javaMethodArgs, "")
+	mSignatureStr, javaMethodSignature := c.createSignature(method.Args)
+	methodSignature := fmt.Sprintf("%s(%s)", method.Name, mSignatureStr)
 
 	dt, _ := c.typeStack.Pop()
 	objectReferenceType := dt.dataType.name
@@ -721,13 +766,17 @@ func (c *KrakatauGen) VisitArrayCreation(*text.ArrayCreation)      {}
 func (c *KrakatauGen) VisitAfterArrayCreation(*text.ArrayCreation) {}
 func (c *KrakatauGen) VisitObjectCreation(obj *text.ObjectCreation) {
 	c.isObjectCreation = true
-}
-
-func (c *KrakatauGen) VisitAfterObjectCreation(obj *text.ObjectCreation) {
 	c.AppendCode(fmt.Sprintf("new %s", obj.Name))
 	c.AppendCode("dup")
 	c.incStackSize(2)
-	c.AppendCode(fmt.Sprintf("invokespecial Method %s <init> ()V", obj.Name))
+}
+
+func (c *KrakatauGen) VisitAfterObjectCreation(obj *text.ObjectCreation) {
+	_, signature := c.createSignature(obj.Args)
+	c.AppendCode(fmt.Sprintf("invokespecial Method %s <init> (%s)V",
+		obj.Name,
+		signature,
+	))
 	c.decStackSize(1)
 }
 func (c *KrakatauGen) VisitBinOp(*text.BinOp) {}

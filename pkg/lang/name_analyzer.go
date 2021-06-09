@@ -206,11 +206,14 @@ func (n *NameAnalyzer) VisitMethodSignature(sign *text.MethodSignature) {
 		}
 	}
 	n.stack.Push(returnType)
+	n.registerParam(sign.ParameterList)
+}
 
-	for _, param := range sign.ParameterList {
+func (n *NameAnalyzer) registerParam(params []text.Parameter) {
+	for _, param := range params {
 		typeof := n.typeTable[param.Type.Name]
 
-		if exist, _ := n.scope.Lookup(param.Name, true); exist != nil {
+		if exist, _ := n.scope.Lookup(param.Name, false); exist != nil {
 			n.AddErrorf(msgParameterAlreadyDeclared, param.Name)
 			return
 		}
@@ -220,10 +223,31 @@ func (n *NameAnalyzer) VisitMethodSignature(sign *text.MethodSignature) {
 			param.Name,
 		})
 	}
-
 }
 
 func (n *NameAnalyzer) VisitMethodDeclaration(*text.MethodDeclaration) {}
+func (n *NameAnalyzer) VisitConstructor(con *text.ConstructorDeclaration) {
+	n.localCount = 0 // reset
+	n.isScopeCreated = true
+	n.newScope(fmt.Sprintf("constructor-%s", con.Signature()))
+
+	classType, _ := n.stack.Pop()
+	n.Insert(&FieldSymbol{
+		classType,
+		"this",
+	})
+	n.stack.Push(classType)
+	n.stack.Push(DataType{
+		NewType("void", Primitive),
+		false,
+	})
+	n.registerParam(con.ParameterList)
+}
+
+func (n *NameAnalyzer) VisitAfterConstructor(*text.ConstructorDeclaration) {
+	n.stack.Pop()
+}
+
 func (n *NameAnalyzer) VisitMainMethodDeclaration(*text.MainMethodDeclaration) {
 	n.localCount = 0
 	returnType := DataType{

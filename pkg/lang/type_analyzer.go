@@ -223,6 +223,8 @@ func (t *TypeAnalyzer) VisitMethodSignature(signature *text.MethodSignature) {
 func (t *TypeAnalyzer) VisitMainMethodDeclaration(*text.MainMethodDeclaration)  {}
 func (t *TypeAnalyzer) VisitMethodDeclaration(*text.MethodDeclaration)          {}
 func (t *TypeAnalyzer) VisitAfterMethodDeclaration(*text.MethodDeclaration)     {}
+func (t *TypeAnalyzer) VisitConstructor(*text.ConstructorDeclaration)           {}
+func (t *TypeAnalyzer) VisitAfterConstructor(*text.ConstructorDeclaration)      {}
 func (t *TypeAnalyzer) VisitVariableDeclaration(*text.VariableDeclaration)      {}
 func (t *TypeAnalyzer) VisitAfterVariableDeclaration(*text.VariableDeclaration) {}
 func (t *TypeAnalyzer) VisitStatementList(text.StatementList)                   {}

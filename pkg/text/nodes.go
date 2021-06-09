@@ -19,6 +19,8 @@ type Visitor interface {
 	VisitMainMethodDeclaration(*MainMethodDeclaration)
 	VisitMethodDeclaration(*MethodDeclaration)
 	VisitAfterMethodDeclaration(*MethodDeclaration)
+	VisitConstructor(*ConstructorDeclaration)
+	VisitAfterConstructor(*ConstructorDeclaration)
 	VisitVariableDeclaration(*VariableDeclaration)
 	VisitAfterVariableDeclaration(*VariableDeclaration)
 	VisitStatementList(StatementList)
@@ -1166,6 +1168,12 @@ func (c *ConstructorDeclaration) DeclType() DeclarationType {
 
 func (c *ConstructorDeclaration) TypeOf() NamedType {
 	return NamedType{c.Name, false}
+}
+
+func (c *ConstructorDeclaration) Accept(v Visitor) {
+	v.VisitConstructor(c)
+	c.MethodDeclaration.Body.Accept(v)
+	v.VisitAfterConstructor(c)
 }
 
 // ----------------- END OF DECLARATIONS
