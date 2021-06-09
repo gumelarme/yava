@@ -132,6 +132,7 @@ func (n *NameAnalyzer) Insert(member TypeMember) {
 
 func (n *NameAnalyzer) VisitProgram(text.Program) {}
 func (n *NameAnalyzer) VisitInterface(i *text.Interface) {
+	n.isScopeCreated = false
 	n.newScope(fmt.Sprintf("interface-%s", i.Name))
 	n.isInterface = true
 	interfaceType := n.typeTable[i.Name]
@@ -148,6 +149,7 @@ func (n *NameAnalyzer) VisitAfterInterface(*text.Interface) {
 }
 
 func (n *NameAnalyzer) VisitClass(class *text.Class) {
+	n.isScopeCreated = false
 	name := fmt.Sprintf("class-%s", class.Name)
 	n.newScope(name)
 	classType := n.typeTable[class.Name]

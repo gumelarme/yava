@@ -447,6 +447,7 @@ func (c *KrakatauGen) VisitMethodSignature(signature *text.MethodSignature) {
 	c.Append(code)
 
 	if c.isInterface {
+		c.isScopeCreated = false
 		c.Append(".end method")
 		c.incScopeIndex()
 	}
