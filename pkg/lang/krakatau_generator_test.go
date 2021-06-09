@@ -1036,6 +1036,7 @@ func TestKrakatauGen_MethodCall(t *testing.T) {
 	human := mockHuman.dataType
 	human.Methods[methodGetAge.Signature()] = NewMethodSymbol(methodGetAge.MethodSignature, *mockInt.dataType)
 	human.Methods[methodGetNameWithParam.Signature()] = NewMethodSymbol(methodGetName.MethodSignature, *mockInt.dataType)
+	human.Methods[methodGetNameWithParam.Signature()].args = []DataType{mockString}
 
 	for _, d := range data {
 		mockKrakatau(func(gen *KrakatauGen) {
@@ -1094,6 +1095,7 @@ func TestKrakatauGen_This(t *testing.T) {
 
 	human.Methods[methodGetAge.Signature()] = NewMethodSymbol(methodGetAge.MethodSignature, *mockInt.dataType)
 	human.Methods[methodGetNameWithParam.Signature()] = NewMethodSymbol(methodGetName.MethodSignature, *mockInt.dataType)
+	human.Methods[methodGetNameWithParam.Signature()].args = []DataType{mockString}
 
 	for _, d := range data {
 		mockKrakatau(func(gen *KrakatauGen) {

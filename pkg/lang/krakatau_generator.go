@@ -726,19 +726,23 @@ func (c *KrakatauGen) VisitMethodCall(method *text.MethodCall) {
 	c.hasField = method.Child != nil
 }
 
-func (c *KrakatauGen) createSignature(args []text.Expression) (string, string) {
-	argLength := len(args)
-	methodArgs := make([]string, argLength)
-	javaMethodArgs := make([]string, argLength)
-
+func (c *KrakatauGen) getArgDataTypes(argLength int) []DataType {
+	methodArgs := make([]DataType, argLength)
 	//reverse
 	for i := 0; i < argLength; i++ {
 		dt, _ := c.typeStack.Pop()
-		javaMethodArgs[argLength-1-i] = fieldDescriptor(dt.dataType.name, dt.isArray)
-		methodArgs[argLength-1-i] = dt.String()
+		methodArgs[argLength-1-i] = dt
 	}
-	m, j := strings.Join(methodArgs, ", "), strings.Join(javaMethodArgs, "")
-	return m, j
+	return methodArgs
+}
+
+func (c *KrakatauGen) createSignatureFromDataTypes(dt []DataType) string {
+	strArgs := make([]string, len(dt))
+	for i, a := range dt {
+		strArgs[i] = fieldDescriptor(a.dataType.name, a.isArray)
+	}
+
+	return strings.Join(strArgs, "")
 }
 
 func (c *KrakatauGen) VisitAfterMethodCall(method *text.MethodCall) {
@@ -747,14 +751,22 @@ func (c *KrakatauGen) VisitAfterMethodCall(method *text.MethodCall) {
 		return
 	}
 
-	mSignatureStr, javaMethodSignature := c.createSignature(method.Args)
-	methodSignature := fmt.Sprintf("%s(%s)", method.Name, mSignatureStr)
+	args := c.getArgDataTypes(len(method.Args))
+	objectRef, _ := c.typeStack.Pop()
+	objectReferenceType := objectRef.dataType.name
+	methodSymbol := objectRef.dataType.LookupMethodByArgs(method.Name, args)
 
-	dt, _ := c.typeStack.Pop()
-	objectReferenceType := dt.dataType.name
-	methodSymbol := dt.dataType.LookupMethod(methodSignature)
+	javaMethodSignature := c.createSignatureFromDataTypes(args)
 	returnType := fieldDescriptor(methodSymbol.Type().dataType.name, methodSymbol.isArray)
-	c.AppendCode(fmt.Sprintf("invokevirtual Method %s %s (%s)%s",
+
+	opcode, referenceType := "invokevirtual", "Method"
+	if objectRef.dataType.TypeCategory == Interface {
+		opcode, referenceType = "invokeinterface", "InterfaceMethod"
+	}
+
+	c.AppendCode(fmt.Sprintf("%s %s %s %s (%s)%s",
+		opcode,
+		referenceType,
 		objectReferenceType,
 		method.Name,
 		javaMethodSignature,
@@ -773,7 +785,9 @@ func (c *KrakatauGen) VisitObjectCreation(obj *text.ObjectCreation) {
 }
 
 func (c *KrakatauGen) VisitAfterObjectCreation(obj *text.ObjectCreation) {
-	_, signature := c.createSignature(obj.Args)
+	//FIXME: check for constructor availability
+	args := c.getArgDataTypes(len(obj.Args))
+	signature := c.createSignatureFromDataTypes(args)
 	c.AppendCode(fmt.Sprintf("invokespecial Method %s <init> (%s)V",
 		obj.Name,
 		signature,

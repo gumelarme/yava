@@ -3,6 +3,7 @@ package lang
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/gumelarme/yava/pkg/text"
 )
@@ -138,6 +139,42 @@ func (t *TypeSymbol) LookupMethod(signature string) *MethodSymbol {
 	return nil
 }
 
+func (t *TypeSymbol) LookupMethodByArgs(name string, args []DataType) *MethodSymbol {
+	sameNameMethods := t.getMethodsByName(name)
+
+	//filter by number of args
+	argLen := len(args)
+	var sameNameSameArgCount []*MethodSymbol
+	for _, method := range sameNameMethods {
+		if argLen == len(method.args) {
+			sameNameSameArgCount = append(sameNameSameArgCount, method)
+		}
+	}
+
+	for _, method := range sameNameSameArgCount {
+		if method.CanAccept(args) {
+			return method
+		}
+	}
+	return nil
+}
+
+func (t *TypeSymbol) getMethodsByName(name string) []*MethodSymbol {
+	var methods []*MethodSymbol
+	for _, m := range t.Methods {
+		if m.name == name {
+			methods = append(methods, m)
+		}
+	}
+
+	if t.extends != nil {
+		parentMethods := t.extends.getMethodsByName(name)
+		methods = append(methods, parentMethods...)
+	}
+
+	return methods
+}
+
 func IsPrimitive(dt DataType) bool {
 	if dt.isArray {
 		return false
@@ -205,7 +242,7 @@ type MethodSymbol struct {
 	DataType
 	accessMod text.AccessModifier
 	name      string
-	signature string
+	args      []DataType
 }
 
 func NewMethodSymbol(signature text.MethodSignature, returnType TypeSymbol) *MethodSymbol {
@@ -216,12 +253,12 @@ func NewMethodSymbol(signature text.MethodSignature, returnType TypeSymbol) *Met
 		},
 		signature.AccessModifier,
 		signature.Name,
-		signature.Signature(),
+		make([]DataType, 0),
 	}
 }
 
 func (m *MethodSymbol) Name() string {
-	return m.signature
+	return m.String()
 }
 
 func (m *MethodSymbol) Type() DataType {
@@ -232,9 +269,38 @@ func (m *MethodSymbol) Category() SymbolCategory {
 	return Method
 }
 
+func (m *MethodSymbol) CanAccept(args []DataType) bool {
+	if len(m.args) != len(args) {
+		return false
+	}
+
+	for i, mArg := range m.args {
+		expect := args[i]
+		if expect == mArg {
+			continue //	accepted
+		}
+
+		if expect.dataType.isDescendantOf(mArg.dataType) &&
+			expect.isArray == mArg.isArray {
+			continue //	accepted
+		}
+
+		if expect.dataType.isImplementing(mArg.dataType) &&
+			expect.isArray == mArg.isArray {
+			continue //	accepted
+		}
+		return false
+	}
+	return true
+}
+
 func (m *MethodSymbol) String() string {
+	argString := make([]string, len(m.args))
+	for i, a := range m.args {
+		argString[i] = a.String()
+	}
 	// return fmt.Sprintf("%s(%s)", m.dataType)
-	return m.signature
+	return fmt.Sprintf("%s(%s)", m.name, strings.Join(argString, ", "))
 }
 
 // FIXME: Change to meaningful name
@@ -280,6 +346,27 @@ func (s *SymbolTable) Lookup(name string, deep bool) (TypeMember, int) {
 
 	if s.parent != nil && deep {
 		return s.parent.Lookup(name, deep)
+	}
+
+	return nil, -1
+}
+
+func (s *SymbolTable) LookupMethod(name string, args []DataType, deep bool) (*MethodSymbol, int) {
+	if s.isVerbose {
+		fmt.Printf("Lookup %s @%s\n", name, s.name)
+	}
+
+	for _, local := range s.table {
+		if local.Member.Category() == Method && local.Member.Name() == name {
+			m := local.Member.(*MethodSymbol)
+			if m.CanAccept(args) {
+				return m, local.address
+			}
+		}
+	}
+
+	if s.parent != nil && deep {
+		return s.parent.LookupMethod(name, args, deep)
 	}
 
 	return nil, -1

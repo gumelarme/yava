@@ -503,7 +503,7 @@ func (n *NameAnalyzer) VisitMethodCall(*text.MethodCall) {
 	n.curField = nil
 }
 
-func (n *NameAnalyzer) getFittingMethod(args []DataType, name string) (method *MethodSymbol) {
+func (n *NameAnalyzer) getFittingMethod(name string, args []DataType) (method *MethodSymbol) {
 	argStr := make([]string, len(args))
 	for i, a := range args {
 		argStr[i] = a.String()
@@ -529,6 +529,24 @@ func (n *NameAnalyzer) getMethodBySignature(signature string) *MethodSymbol {
 	return method.(*MethodSymbol)
 }
 
+func (n *NameAnalyzer) getMethodByArgs(name string, args []DataType) *MethodSymbol {
+	var method TypeMember
+	if n.curField != nil {
+		method = n.curField.Type().dataType.LookupMethodByArgs(name, args)
+	} else {
+		method, _ = n.scope.LookupMethod(name, args, true)
+	}
+
+	var emptyMethod *MethodSymbol
+	if method == nil || method == emptyMethod {
+		// FIXME: change to signature
+		n.AddErrorf(msgMethodNotFound, name)
+		return nil
+	}
+
+	return method.(*MethodSymbol)
+}
+
 func (n *NameAnalyzer) VisitAfterMethodCall(method *text.MethodCall) {
 	if n.isObjectCreation {
 		n.isObjectCreation = false
@@ -546,7 +564,7 @@ func (n *NameAnalyzer) VisitAfterMethodCall(method *text.MethodCall) {
 		args[len(method.Args)-i-1] = typeof
 	}
 
-	methodSym := n.getFittingMethod(args, method.Name)
+	methodSym := n.getMethodByArgs(method.Name, args)
 	access := n.getAccess()
 	if methodSym != nil && methodSym.accessMod&access == 0 {
 		argStr := make([]string, len(args))

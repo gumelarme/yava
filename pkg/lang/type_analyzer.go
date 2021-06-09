@@ -140,7 +140,7 @@ func (t *TypeAnalyzer) addConstructorIfEmpty(name string) {
 		DataType{t.table[name], false},
 		text.Public,
 		name,
-		signature,
+		make([]DataType, 0),
 	}
 
 }
@@ -194,19 +194,16 @@ func (t *TypeAnalyzer) VisitMethodSignature(signature *text.MethodSignature) {
 		typeof = t.table[signature.ReturnType.Name]
 	}
 
-	parameters := make([]*FieldSymbol, len(signature.ParameterList))
+	parameters := make([]DataType, len(signature.ParameterList))
 	for i, param := range signature.ParameterList {
 		if !t.typeExist(param.Type.Name) {
 			t.AddErrorf(msgTypeNotExist, param.Name)
 			continue
 		}
 
-		parameters[i] = &FieldSymbol{
-			DataType{
-				t.table[param.Type.Name],
-				param.Type.IsArray,
-			},
-			param.Name,
+		parameters[i] = DataType{
+			t.table[param.Type.Name],
+			param.Type.IsArray,
 		}
 	}
 
@@ -214,7 +211,7 @@ func (t *TypeAnalyzer) VisitMethodSignature(signature *text.MethodSignature) {
 		DataType{typeof, signature.ReturnType.IsArray},
 		signature.AccessModifier,
 		signature.Name,
-		signature.Signature(),
+		parameters,
 	}
 }
 
