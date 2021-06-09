@@ -1,7 +1,6 @@
 package lang
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/gumelarme/yava/pkg/text"
@@ -131,7 +130,6 @@ func (t *TypeAnalyzer) VisitAfterClass(class *text.Class) {
 
 func (t *TypeAnalyzer) addConstructorIfEmpty(name string) {
 	for key := range t.table[name].Methods {
-		fmt.Println("I Have", key)
 		if strings.HasPrefix(key, name+"(") {
 			return
 		}

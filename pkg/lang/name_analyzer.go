@@ -503,6 +503,32 @@ func (n *NameAnalyzer) VisitMethodCall(*text.MethodCall) {
 	n.curField = nil
 }
 
+func (n *NameAnalyzer) getFittingMethod(args []DataType, name string) (method *MethodSymbol) {
+	argStr := make([]string, len(args))
+	for i, a := range args {
+		argStr[i] = a.String()
+	}
+	signature := fmt.Sprintf("%s(%s)", name, strings.Join(argStr, ", "))
+	return n.getMethodBySignature(signature)
+}
+
+func (n *NameAnalyzer) getMethodBySignature(signature string) *MethodSymbol {
+	var method TypeMember
+	if n.curField != nil {
+		method = n.curField.Type().dataType.LookupMethod(signature)
+	} else {
+		method, _ = n.scope.Lookup(signature, true)
+	}
+
+	var emptyMethod *MethodSymbol
+	if method == nil || method == emptyMethod {
+		n.AddErrorf(msgMethodNotFound, signature)
+		return nil
+	}
+
+	return method.(*MethodSymbol)
+}
+
 func (n *NameAnalyzer) VisitAfterMethodCall(method *text.MethodCall) {
 	if n.isObjectCreation {
 		n.isObjectCreation = false
@@ -514,32 +540,21 @@ func (n *NameAnalyzer) VisitAfterMethodCall(method *text.MethodCall) {
 		n.fieldBuffer = nil
 	}
 
-	argCount := make([]string, len(method.Args))
-
-	for i := range argCount {
+	args := make([]DataType, len(method.Args))
+	for i := range args {
 		typeof, _ := n.stack.Pop()
-		argCount[len(argCount)-i-1] = typeof.String()
+		args[len(method.Args)-i-1] = typeof
 	}
 
-	signature := fmt.Sprintf("%s(%s)", method.Name, strings.Join(argCount, ", "))
-	var emptyMethod *MethodSymbol
-	var exist TypeMember
-	if n.curField != nil {
-		exist = n.curField.Type().dataType.LookupMethod(signature)
-	} else {
-		exist, _ = n.scope.Lookup(signature, true)
-	}
-
-	// weird emptyMethod
-	if exist == nil || exist == emptyMethod {
-		n.AddErrorf(msgMethodNotFound, signature)
-		return
-	}
-
+	methodSym := n.getFittingMethod(args, method.Name)
 	access := n.getAccess()
-
-	methodSym := exist.(*MethodSymbol)
 	if methodSym != nil && methodSym.accessMod&access == 0 {
+		argStr := make([]string, len(args))
+		for i, a := range args {
+			argStr[i] = a.String()
+		}
+
+		signature := fmt.Sprintf("%s(%s)", method.Name, strings.Join(argStr, ", "))
 		n.AddErrorf(msgMethodNotFound, signature)
 		return
 	}
