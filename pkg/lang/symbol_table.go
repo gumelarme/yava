@@ -323,7 +323,7 @@ func NewSymbolTable(name string, level int, parent *SymbolTable) SymbolTable {
 		level,
 		make(map[string]Local),
 		parent,
-		true,
+		false,
 	}
 }
 

@@ -756,7 +756,7 @@ func (c *KrakatauGen) VisitAfterMethodCall(method *text.MethodCall) {
 	objectReferenceType := objectRef.dataType.name
 	methodSymbol := objectRef.dataType.LookupMethodByArgs(method.Name, args)
 
-	javaMethodSignature := c.createSignatureFromDataTypes(args)
+	javaMethodSignature := c.createSignatureFromDataTypes(methodSymbol.args)
 	returnType := fieldDescriptor(methodSymbol.Type().dataType.name, methodSymbol.isArray)
 
 	opcode, referenceType := "invokevirtual", "Method"
