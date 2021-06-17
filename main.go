@@ -14,6 +14,14 @@ type HasError interface {
 }
 
 func main() {
+	compileFile()
+}
+
+func compileText(content string){
+	compile(text.NewStringScannner(content))
+}
+
+func compileFile() {
 	if len(os.Args) < 2 {
 		fmt.Println("Please provide a file")
 	}
