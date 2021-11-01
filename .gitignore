@@ -4,4 +4,5 @@ changes.org
 *.html
 *.class
 _java_scratch_file_/*
+_bin/*
 TAGS

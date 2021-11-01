@@ -1,7 +1,12 @@
+main:
+	go run ./main.go
 parser:
 	go run cmd/parser/main.go
 
-test: test_text
+test: test_text test_lang
+
+test_lang:
+	go test -tags integration ./pkg/lang
 
 test_text:
 	go test -tags integration ./pkg/text

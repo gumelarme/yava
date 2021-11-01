@@ -70,6 +70,7 @@ const (
 	MultiplicationAssignment // *=
 	DivisionAssignment       // /=
 	ModulusAssignment        // %=
+	Colon
 )
 
 // return the string representation of the TokenType
@@ -118,6 +119,7 @@ func (t TokenType) String() string {
 		"MultiplicationAssignment",
 		"DivisionAssignment",
 		"ModAssignment",
+		"Colon",
 	}[t]
 }
 
@@ -997,6 +999,7 @@ func (lx *Lexer) separator() Token {
 }
 
 var operatorMap = map[string]TokenType{
+	":": Colon,
 	"+": Addition,
 	"-": Subtraction,
 	"*": Multiplication,

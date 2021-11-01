@@ -2,12 +2,15 @@ package text
 
 import (
 	"fmt"
+	"io"
 )
 
 // Parser represent a parser engine
 type Parser struct {
 	lexer    *Lexer
 	curToken *Token
+	EOF      bool
+	program  Program
 }
 
 func KeywordEqualTo(token Token, str string) bool {
@@ -20,6 +23,8 @@ func NewParser(lexer *Lexer) Parser {
 	return Parser{
 		lexer,
 		&tok,
+		false,
+		make(Program, 0),
 	}
 }
 
@@ -30,20 +35,499 @@ func (p *Parser) match(token TokenType) string {
 
 	value := p.curToken.Value()
 	if p.curToken.Type != token {
-		msg := fmt.Sprintf("Expected %s but got %s at %s",
+		msg := fmt.Sprintf("|%s| Expected %s but got %s",
+			p.curToken.Position,
 			token,
 			p.curToken.Type,
-			p.curToken.Position,
 		)
 		panic(msg)
 	}
 
-	tok, _ := p.lexer.NextToken()
+	tok, err := p.lexer.NextToken()
+	if err == io.EOF {
+		p.EOF = true
+	}
 	p.curToken = &tok
+
 	return value
 }
 
-// FIXME: shoudl objectInitialization be in primaryExpression so
+var accessModMap = map[string]AccessModifier{
+	"public":    Public,
+	"protected": Protected,
+	"private":   Private,
+}
+
+func (p *Parser) Compile() Program {
+	for !p.EOF {
+		if p.curToken.Type != Keyword {
+			panic(fmt.Sprintf(
+				"Expecting class or interface declaration but got %s",
+				p.curToken,
+			))
+		}
+
+		var t Template
+		if p.curToken.Value() == "class" {
+			t = p.classDeclaration()
+		} else {
+			t = p.interfaceDeclaration()
+		}
+		p.program.AddTemplate(t)
+	}
+	return p.program
+}
+
+func (p *Parser) interfaceDeclaration() *Interface {
+	var i Interface
+	p.match(Keyword) // interface
+	i.Name = p.match(Id)
+	p.match(LeftCurlyBracket)
+	for p.curToken.Type != RightCurlyBracket {
+		signature := p.methodSignature()
+		i.AddMethod(signature)
+	}
+	p.match(RightCurlyBracket)
+	return &i
+}
+
+func (p *Parser) methodSignature() *MethodSignature {
+	var method MethodSignature
+	method.AccessModifier = p.accessModifier()
+	method.ReturnType = p.declarationType()
+	method.Name = p.match(Id)
+	method.ParameterList = p.parameterList()
+	p.match(Semicolon)
+	return &method
+}
+
+func (p *Parser) classDeclaration() *Class {
+	p.match(Keyword)
+	class := NewEmptyClass(p.match(Id), "", "")
+	if key := p.curToken.Value(); p.curToken.Type == Keyword &&
+		key == "extends" ||
+		key == "implements" {
+		p.classExtends(class)
+	}
+
+	p.match(LeftCurlyBracket)
+	for p.curToken.Type != RightCurlyBracket {
+		decl := p.declaration()
+		class.AddDeclaration(decl)
+	}
+	p.match(RightCurlyBracket)
+
+	return class
+}
+
+func (p *Parser) classExtends(class *Class) {
+	key := p.match(Keyword)
+	name := p.match(Id)
+	if key == "extends" {
+		class.Extend = name
+	} else if key == "implements" {
+		class.Implement = name
+	} else {
+		panic("Expect `extends` or `implements` keyword.")
+	}
+
+}
+
+func (p *Parser) declaration() (decl Declaration) {
+	accessMod := p.accessModifier()
+	if p.curToken.Value() == "static" {
+		if accessMod != Public {
+			panic("Expected to be a main method!")
+		}
+		return p.mainMethodDeclaration()
+	}
+
+	ty := p.declarationType()
+	// its certainly a constructor, and the type is actually a name
+	if p.curToken.Type == LeftParenthesis {
+		return p.constructorDeclaration(accessMod, ty.Name)
+	}
+
+	peek, _ := p.lexer.PeekToken()
+
+	if peek.Type == LeftParenthesis {
+		return p.methodDeclaration(accessMod, ty)
+	} else {
+		return p.propertyDeclaration(accessMod, ty)
+	}
+}
+
+func (p *Parser) accessModifier() (acc AccessModifier) {
+	if val := p.curToken.Value(); val == "public" ||
+		val == "private" || val == "protected" {
+
+		key := p.match(Keyword)
+		acc = accessModMap[key]
+	}
+	return
+}
+
+func (p *Parser) declarationType() NamedType {
+	var name string
+	if p.curToken.Type == Keyword {
+		if p.curToken.Value() != "void" {
+			name = p.primitiveType()
+		} else {
+			p.match(Keyword)
+			name = "void"
+		}
+	} else {
+		name = p.match(Id)
+	}
+	return p.typeArray(name)
+}
+
+func (p *Parser) parameterList() (params []Parameter) {
+	isType := func() bool {
+		if p.curToken.Type == Id {
+			return true
+		}
+
+		if val := p.curToken.Value(); p.curToken.Type == Keyword &&
+			(val == "int" || val == "boolean" || val == "char") {
+			return true
+		}
+
+		return false
+	}
+
+	p.match(LeftParenthesis)
+	for isType() {
+		ty := p.typeArray(p.match(p.curToken.Type))
+		name := p.match(Id)
+		params = append(params, Parameter{ty, name})
+		if p.curToken.Type == Comma {
+			p.match(Comma)
+		} else {
+			break
+		}
+	}
+	p.match(RightParenthesis)
+	return
+}
+
+func (p *Parser) mainMethodDeclaration() *MainMethodDeclaration {
+	var main MainMethodDeclaration
+	p.match(Keyword) // static
+
+	if retType := p.match(Keyword); retType != "void" {
+		panic("Expecting a void type for main method, instead got: " + retType)
+	}
+
+	if name := p.match(Id); name != "main" {
+		panic("Expecting a main method, instead got: " + name)
+	}
+
+	p.match(LeftParenthesis)
+	ty := p.typeArray(p.match(Id))
+
+	if !(ty.IsArray && ty.Name == "String") {
+		panic("Expecting a String[], instead got: " + ty.String())
+	}
+
+	arg := p.match(Id) // args
+	p.match(RightParenthesis)
+
+	main.AccessModifier = Public
+	main.ReturnType = NamedType{"void", false}
+	main.Name = "main"
+	main.ParameterList = []Parameter{{ty, arg}}
+	main.Body = p.statementList()
+
+	return &main
+}
+func (p *Parser) constructorDeclaration(accessMod AccessModifier, name string) *ConstructorDeclaration {
+	return NewConstructor(accessMod, name, p.parameterList(), p.statementList())
+}
+
+func (p *Parser) methodDeclaration(accessMod AccessModifier, typename NamedType) *MethodDeclaration {
+	var decl MethodDeclaration
+	decl.AccessModifier = accessMod
+	decl.ReturnType = typename
+	decl.Name = p.match(Id)
+	decl.ParameterList = p.parameterList()
+	decl.Body = p.statementList()
+	return &decl
+}
+
+func (p *Parser) propertyDeclaration(acc AccessModifier, ty NamedType) *PropertyDeclaration {
+	var prop PropertyDeclaration
+	prop.AccessModifier = acc
+	prop.Type = ty
+	prop.Name = p.match(Id)
+
+	if p.curToken.Type == Assignment {
+		p.match(Assignment)
+		prop.Value = p.expression()
+	}
+	p.match(Semicolon)
+
+	return &prop
+}
+
+func (p *Parser) statementList() (stmtList StatementList) {
+	p.match(LeftCurlyBracket)
+	for p.curToken.Type != RightCurlyBracket {
+		x := p.statement()
+		stmtList = append(stmtList, x)
+	}
+
+	p.match(RightCurlyBracket)
+	return
+}
+
+func (p *Parser) statement() (stmt Statement) {
+	if p.curToken.Type == LeftCurlyBracket {
+		return p.statementList()
+	}
+
+	if p.curToken.Type == Keyword {
+		switch p.curToken.Value() {
+		case "return", "break", "continue":
+			stmt = p.jumpStmt()
+		case "switch":
+			stmt = p.switchStmt()
+		case "if":
+			stmt = p.ifStmt()
+		case "while":
+			stmt = p.whileStmt()
+		case "for":
+			stmt = p.forStmt()
+		case "this":
+			stmt = p.varDeclarationOrMethodOrAssignment()
+			p.match(Semicolon)
+		case "int", "boolean", "char":
+			stmt = p.primitiveTypeVarDeclaration()
+			p.match(Semicolon)
+		}
+	} else if p.curToken.Type == Id {
+		stmt = p.varDeclarationOrMethodOrAssignment()
+		p.match(Semicolon)
+	}
+
+	return
+}
+
+func (p *Parser) variableDeclaration(typeof NamedType) *VariableDeclaration {
+	var vd VariableDeclaration
+	vd.Type = typeof
+	vd.Name = p.match(Id)
+
+	if p.curToken.Type == Assignment {
+		p.match(Assignment)
+		vd.Value = p.expression()
+	}
+	return &vd
+}
+
+func (p *Parser) primitiveTypeVarDeclaration() *VariableDeclaration {
+	name := p.primitiveType()
+	ty := p.typeArray(name)
+	return p.variableDeclaration(ty)
+}
+
+func (p *Parser) typeArray(name string) NamedType {
+	ty := NamedType{name, false}
+	if p.curToken.Type == LeftSquareBracket {
+		p.match(LeftSquareBracket)
+		p.match(RightSquareBracket)
+		ty.IsArray = true
+	}
+	return ty
+}
+
+// varDeclarationOrMethodOrAssignment determine wether the next statement
+// is variable-declaration, method-call or assignment statement
+func (p *Parser) varDeclarationOrMethodOrAssignment() (s Statement) {
+	var namedVal NamedValue
+	if p.curToken.Type == Keyword {
+		namedVal = p.validName()
+	} else {
+		// ID here is ambiguous, either a type or var
+		peek, _ := p.lexer.PeekToken()
+		if peek.Type == Id {
+			ty := p.typeArray(p.match(Id))
+			return p.variableDeclaration(ty)
+
+		} else if peek.Type == LeftSquareBracket {
+			// [ can be an array-access or a type array
+			name := p.match(Id)
+			peek, _ = p.lexer.PeekToken()
+			if peek.Type == RightSquareBracket { // nothing in between []
+				ty := p.typeArray(name)
+				return p.variableDeclaration(ty)
+			}
+			namedVal = p.fieldAccessFrom(name)
+		} else {
+			// possibly a dot or a LeftParen
+			namedVal = p.validName()
+		}
+	}
+	return p.methodOrAssignment(namedVal)
+}
+
+func (p *Parser) methodOrAssignment(namedVal NamedValue) (s Statement) {
+	end := IdEndsAs(namedVal)
+	if end == "MethodCall" {
+		s = &MethodCallStatement{namedVal}
+	} else {
+		s = p.assignmentStmt(namedVal)
+	}
+	return
+}
+
+func (p *Parser) assignmentStmt(left NamedValue) *AssignmentStatement {
+	var assig AssignmentStatement
+	assig.Left = left
+	if t := p.curToken.Type; t == Assignment ||
+		t == AdditionAssignment ||
+		t == SubtractionAssignment ||
+		t == MultiplicationAssignment ||
+		t == DivisionAssignment ||
+		t == ModulusAssignment {
+		token := *p.curToken
+		p.match(t)
+		assig.Operator = token
+	}
+
+	assig.Right = p.conditionalOrExp()
+	return &assig
+}
+
+func (p *Parser) varDeclarationOrAssignment() (stmt Statement) {
+	if p.curToken.Type == Keyword {
+		switch p.curToken.Value() {
+		case "int", "boolean", "char":
+			stmt = p.primitiveTypeVarDeclaration()
+		case "this":
+			stmt = p.varDeclarationOrMethodOrAssignment()
+		}
+	} else if p.curToken.Type == Id {
+		stmt = p.varDeclarationOrMethodOrAssignment()
+	}
+	return
+}
+
+func (p *Parser) forUpdate() (stmt Statement) {
+	if p.curToken.Type == RightParenthesis {
+		return
+	}
+	namedVal := p.validName()
+	return p.methodOrAssignment(namedVal)
+}
+
+func (p *Parser) forStmt() *ForStatement {
+	var f ForStatement
+	p.match(Keyword)
+	p.match(LeftParenthesis)
+
+	f.Init = p.varDeclarationOrAssignment()
+	p.match(Semicolon)
+
+	if p.curToken.Type != Semicolon {
+		f.Condition = p.expression()
+	}
+	p.match(Semicolon)
+
+	f.Update = p.forUpdate()
+	p.match(RightParenthesis)
+
+	f.Body = p.statement()
+	return &f
+}
+
+func (p *Parser) whileStmt() *WhileStatement {
+	var whileStmt WhileStatement
+	p.match(Keyword)
+	p.match(LeftParenthesis)
+	whileStmt.Condition = p.expression()
+	p.match(RightParenthesis)
+	whileStmt.Body = p.statement()
+	return &whileStmt
+}
+
+func (p *Parser) ifStmt() *IfStatement {
+	var ifStmt IfStatement
+	p.match(Keyword)
+	p.match(LeftParenthesis)
+	ifStmt.Condition = p.expression()
+	p.match(RightParenthesis)
+
+	ifStmt.Body = p.statement()
+
+	if p.curToken.Value() == "else" {
+		p.match(Keyword)
+		if p.curToken.Value() == "if" {
+			ifStmt.Else = p.ifStmt()
+		} else {
+			ifStmt.Else = p.statement()
+		}
+	}
+
+	return &ifStmt
+}
+
+func (p *Parser) switchStmt() *SwitchStatement {
+	p.match(Keyword)
+	p.match(LeftParenthesis)
+	exp := p.expression()
+	p.match(RightParenthesis)
+
+	p.match(LeftCurlyBracket)
+	var cases []*CaseStatement
+	for KeywordEqualTo(*p.curToken, "case") {
+		cases = append(cases, p.caseStmt())
+	}
+
+	var defaults []Statement
+	if KeywordEqualTo(*p.curToken, "default") {
+		p.match(Keyword)
+		p.match(Colon)
+		for p.curToken.Type != RightCurlyBracket {
+			defaults = append(defaults, p.statement())
+		}
+	}
+	p.match(RightCurlyBracket)
+
+	return &SwitchStatement{exp, cases, defaults}
+}
+
+func (p *Parser) caseStmt() *CaseStatement {
+	p.match(Keyword)
+	constant := p.primitiveLiteral()
+	p.match(Colon)
+	var stmtList StatementList
+	val := p.curToken.Value()
+	for val != "case" && val != "default" {
+		stmt := p.statement()
+		if stmt == nil {
+			break
+		}
+		stmtList = append(stmtList, stmt)
+		val = p.curToken.Value()
+	}
+	return &CaseStatement{constant, stmtList}
+}
+
+func (p *Parser) jumpStmt() Statement {
+	key := p.match(Keyword)
+	jumpType := jumpTypeMap[key]
+	stmt := &JumpStatement{jumpType, nil}
+
+	if jumpType == ReturnJump && p.curToken.Type != Semicolon {
+		stmt.Exp = p.expression()
+	}
+
+	p.match(Semicolon)
+	return stmt
+}
+
+// FIXME: should objectInitialization be in primaryExpression so
 // it could use surrounding parens, but the array cant tho
 func (p *Parser) expression() Expression {
 	if KeywordEqualTo(*p.curToken, "new") {
@@ -67,10 +551,10 @@ func (p *Parser) conditionalOrExp() Expression {
 func (p *Parser) conditionalAndExp() Expression {
 	left := p.relationalExp()
 	for p.curToken.Type == And {
-		orToken := *p.curToken
+		andToken := *p.curToken
 		p.match(And)
 		right := p.conditionalAndExp()
-		left = &BinOp{orToken, left, right}
+		left = &BinOp{andToken, left, right}
 	}
 	return left
 }
@@ -177,18 +661,11 @@ func (p *Parser) multiplicativeExp() Expression {
 // primaryExp parse literal, field-access, and method-call
 func (p *Parser) primaryExp() (ex Expression) {
 	switch p.curToken.Type {
-	case IntegerLiteral:
-		value := p.match(IntegerLiteral)
-		ex = NumFromStr(value)
+	case IntegerLiteral, BooleanLiteral, CharLiteral:
+		ex = p.primitiveLiteral()
 	case StringLiteral:
 		value := p.match(StringLiteral)
 		ex = String(value)
-	case BooleanLiteral:
-		value := p.match(BooleanLiteral)
-		ex = NewBoolean(value)
-	case CharLiteral:
-		value := p.match(CharLiteral)
-		ex = NewChar(value)
 	case NullLiteral:
 		p.match(NullLiteral)
 		ex = Null{}
@@ -201,11 +678,26 @@ func (p *Parser) primaryExp() (ex Expression) {
 		ex = p.conditionalOrExp()
 		p.match(RightParenthesis)
 	default:
-		//FIXME: What to do?
-		panic("Unexpected")
+		msg := fmt.Sprintf("Unexpected: %s", p.curToken)
+		panic(msg)
 	}
 
 	return
+}
+
+func (p *Parser) primitiveLiteral() (ex PrimitiveLiteral) {
+	switch p.curToken.Type {
+	case IntegerLiteral:
+		value := p.match(IntegerLiteral)
+		ex = NumFromStr(value)
+	case BooleanLiteral:
+		value := p.match(BooleanLiteral)
+		ex = NewBoolean(value)
+	case CharLiteral:
+		value := p.match(CharLiteral)
+		ex = NewChar(value)
+	}
+	return ex
 }
 
 func (p *Parser) validName() (val NamedValue) {
@@ -219,31 +711,58 @@ func (p *Parser) validName() (val NamedValue) {
 	return
 }
 
+func (p *Parser) fieldAccessFrom(name string) (val NamedValue) {
+	if p.curToken.Type == LeftParenthesis {
+		args := p.argumentList()
+		child := p.methodCallTail()
+		val = &MethodCall{name, args, child}
+	} else {
+		val = &FieldAccess{name, p.fieldAccessTail()}
+	}
+	return
+}
+
 func (p *Parser) fieldAccess() (val NamedValue) {
 	peek, _ := p.lexer.PeekToken()
 	if peek.Type == LeftParenthesis {
 		val = p.methodCall()
 	} else {
 		name := p.match(Id)
-		field := &FieldAccess{name, nil}
+		val = &FieldAccess{name, p.fieldAccessTail()}
+	}
+	return
+}
 
-		if t := p.curToken.Type; t == Dot {
-			p.match(Dot)
-			field.Child = p.fieldAccess()
-		} else if t == LeftSquareBracket {
-			field.Child = p.arrayAccess()
-		}
-		val = field
+func (p *Parser) fieldAccessTail() (val NamedValue) {
+	if t := p.curToken.Type; t == Dot {
+		p.match(Dot)
+		val = p.fieldAccess()
+	} else if t == LeftSquareBracket {
+		val = p.arrayAccess()
 	}
 	return
 }
 
 func (p *Parser) methodCall() *MethodCall {
-
 	name := p.match(Id)
-	p.match(LeftParenthesis)
-	args := []Expression{}
+	args := p.argumentList()
+	method := &MethodCall{name, args, p.methodCallTail()}
+	return method
+}
 
+func (p *Parser) methodCallTail() (val NamedValue) {
+	if t := p.curToken.Type; t == Dot {
+		p.match(Dot)
+		val = p.fieldAccess()
+	} else if t == LeftSquareBracket {
+		val = p.arrayAccess()
+	}
+	return
+}
+
+func (p *Parser) argumentList() []Expression {
+	args := []Expression{}
+	p.match(LeftParenthesis)
 	if p.curToken.Type != RightParenthesis {
 		args = append(args, p.expression())
 		for p.curToken.Type == Comma {
@@ -251,18 +770,8 @@ func (p *Parser) methodCall() *MethodCall {
 			args = append(args, p.expression())
 		}
 	}
-
-	method := &MethodCall{name, args, nil}
 	p.match(RightParenthesis)
-
-	if t := p.curToken.Type; t == Dot {
-		p.match(Dot)
-		method.Child = p.fieldAccess()
-	} else if t == LeftSquareBracket {
-		method.Child = p.arrayAccess()
-	}
-
-	return method
+	return args
 }
 
 func (p *Parser) arrayAccess() *ArrayAccess {
